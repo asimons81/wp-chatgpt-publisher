@@ -13,7 +13,7 @@ The release includes:
 - architecture, threat model, privacy/terms templates, self-hosting, reviewer workflow, and submission materials
 - automated unit, PHP, integration, E2E, security, lifecycle, compatibility, and packaging gates
 
-This patch keeps OAuth grants, authorization codes, signed connection requests, and other query-string credentials out of structured request and redirect-response logs. It also makes both release ZIPs byte-for-byte reproducible across checkout times and operating systems, removes duplicated version literals from the packaging pipeline, adds an automated archive-reproducibility gate, and expands the WordPress.org external-service disclosure. Product permissions are unchanged from 1.0.1.
+This patch keeps OAuth grants, authorization codes, signed connection requests, and other query-string credentials out of structured request and redirect-response logs, and returns a safe 400 validation response for malformed JSON. It also makes both release ZIPs byte-for-byte reproducible across checkout times and operating systems, removes duplicated version literals from the packaging pipeline, adds an automated archive-reproducibility gate, and expands the WordPress.org external-service disclosure. Product permissions are unchanged from 1.0.1.
 
 Known v1 exclusions include Multisite, WordPress.com hosted plans, headless sites, disabled REST API environments, AIOSEO writes, permanent deletion, broad site administration, code/filesystem/database execution, autonomous generation/publishing, and built-in OpenAI API calls.
 

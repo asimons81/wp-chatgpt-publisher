@@ -37,6 +37,18 @@ export class AppError extends Error {
 }
 export function toAppError(error: unknown): AppError {
   if (error instanceof AppError) return error;
+  if (
+    error instanceof SyntaxError &&
+    (error as { status?: unknown }).status === 400 &&
+    (error as { type?: unknown }).type === "entity.parse.failed"
+  ) {
+    return new AppError(
+      "validation_error",
+      "The request body must contain valid JSON.",
+      400,
+      "Correct the JSON syntax and send the request again.",
+    );
+  }
   return new AppError(
     "upstream_error",
     "The operation could not be completed.",

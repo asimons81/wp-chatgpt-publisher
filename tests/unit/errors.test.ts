@@ -28,4 +28,17 @@ describe("safe application errors", () => {
     expect(mapped.retryable).toBe(true);
     expect(JSON.stringify(mapped.toSafeObject())).not.toContain("database password secret");
   });
+
+  it("maps malformed JSON to a safe client validation error", () => {
+    const parserError = Object.assign(new SyntaxError("secret parser detail"), {
+      status: 400,
+      type: "entity.parse.failed",
+    });
+    const mapped = toAppError(parserError);
+
+    expect(mapped.code).toBe("validation_error");
+    expect(mapped.status).toBe(400);
+    expect(mapped.retryable).toBe(false);
+    expect(JSON.stringify(mapped.toSafeObject())).not.toContain("secret parser detail");
+  });
 });

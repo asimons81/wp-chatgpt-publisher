@@ -25,6 +25,16 @@ try {
   });
   if (redirect.status !== 302) throw new Error("Log redaction redirect probe failed.");
   await redirect.text();
+
+  const malformed = await fetch(`http://127.0.0.1:${port}/mcp`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{",
+  });
+  const malformedBody = (await malformed.json()) as { error?: { code?: string } };
+  if (malformed.status !== 400 || malformedBody.error?.code !== "validation_error") {
+    throw new Error("Malformed JSON did not produce a safe validation response.");
+  }
   await new Promise((resolve) => setTimeout(resolve, 25));
   process.stdout.write("WPCP_LOG_REDACTION_OK\n");
 } finally {
