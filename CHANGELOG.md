@@ -2,6 +2,18 @@
 
 All notable changes follow Keep a Changelog and Semantic Versioning.
 
+## [1.0.2] - 2026-07-13
+
+### Fixed
+
+- Prevented OAuth grants, authorization codes, signed connection requests, and other query-string credentials from appearing in structured request or redirect-response logs.
+- Made WordPress and source ZIPs byte-for-byte reproducible by normalizing entry order, timestamps, path separators, and file modes.
+- Derived archive names and release validation from the root package version instead of duplicating version literals across packaging scripts and workflows.
+
+### Documentation
+
+- Added explicit WordPress.org external-service disclosure and a current directory-guideline submission audit.
+
 ## [1.0.1] - 2026-07-13
 
 ### Added
@@ -34,5 +46,6 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Added idempotent in-place schema upgrades that preserve existing data.
 - Deactivation removes scheduled cleanup but preserves data; uninstall preserves by default and supports explicit full removal.
 
+[1.0.2]: https://github.com/asimons81/wp-chatgpt-publisher/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/asimons81/wp-chatgpt-publisher/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/asimons81/wp-chatgpt-publisher/releases/tag/v1.0.0

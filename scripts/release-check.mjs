@@ -1,4 +1,5 @@
 import { access, readFile } from "node:fs/promises";
+import { releaseMetadata } from "./release-metadata.mjs";
 
 const required = [
   "README.md",
@@ -15,6 +16,7 @@ const required = [
   "docs/wordpress-setup.md",
   "docs/self-hosting.md",
   "docs/app-submission.md",
+  "docs/wordpress-submission.md",
   "docs/release-checklist.md",
   "docs/demo-script.md",
   "docs/compatibility.md",
@@ -26,15 +28,17 @@ const required = [
   "wordpress/editorial-publisher-for-chatgpt/readme.txt",
 ];
 for (const file of required) await access(file);
-const packageJson = JSON.parse(await readFile("package.json", "utf8"));
-if (packageJson.version !== "1.0.1") throw new Error("Root version is not 1.0.1");
+const { version } = await releaseMetadata();
 const plugin = await readFile(
   "wordpress/editorial-publisher-for-chatgpt/editorial-publisher-for-chatgpt.php",
   "utf8",
 );
-if (!plugin.includes("Version:           1.0.1")) throw new Error("Plugin header version mismatch");
+if (!plugin.includes(`Version:           ${version}`))
+  throw new Error("Plugin header version mismatch");
+if (!plugin.includes(`define( 'WPCP_VERSION', '${version}' );`))
+  throw new Error("Plugin runtime version mismatch");
 const readme = await readFile("wordpress/editorial-publisher-for-chatgpt/readme.txt", "utf8");
-if (!readme.includes("Stable tag: 1.0.1")) throw new Error("WordPress stable tag mismatch");
+if (!readme.includes(`Stable tag: ${version}`)) throw new Error("WordPress stable tag mismatch");
 for (const forbidden of ["OPENAI_API_KEY", "sk-proj-", "sk_live_", "BEGIN PRIVATE KEY"]) {
   if (plugin.includes(forbidden))
     throw new Error(`Forbidden secret marker in plugin: ${forbidden}`);

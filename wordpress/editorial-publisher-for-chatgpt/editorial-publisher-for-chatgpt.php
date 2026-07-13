@@ -3,7 +3,7 @@
  * Plugin Name:       Editorial Publisher for ChatGPT
  * Plugin URI:        https://github.com/asimons81/wp-chatgpt-publisher
  * Description:       Securely manage WordPress editorial workflows from ChatGPT without an OpenAI API key or separate API bill.
- * Version:           1.0.1
+ * Version:           1.0.2
  * Requires at least: 6.9
  * Requires PHP:      8.1
  * Author:            Editorial Publisher for ChatGPT contributors
@@ -16,7 +16,7 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'WPCP_VERSION', '1.0.1' );
+define( 'WPCP_VERSION', '1.0.2' );
 define( 'WPCP_FILE', __FILE__ );
 define( 'WPCP_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPCP_URL', plugin_dir_url( __FILE__ ) );

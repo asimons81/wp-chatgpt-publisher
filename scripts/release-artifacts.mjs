@@ -1,52 +1,22 @@
 import { createHash } from "node:crypto";
-import { createWriteStream } from "node:fs";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { ZipArchive } from "archiver";
+import { execFile } from "node:child_process";
+import { readFile, readdir, writeFile } from "node:fs/promises";
+import { promisify } from "node:util";
+import { releaseMetadata } from "./release-metadata.mjs";
+import { writeReproducibleZip } from "./reproducible-zip.mjs";
 
-await mkdir("artifacts", { recursive: true });
-async function zipSource() {
-  const target = "artifacts/editorial-publisher-for-chatgpt-1.0.1-source.zip";
-  await rm(target, { force: true });
-  const output = createWriteStream(target);
-  const archive = new ZipArchive({ zlib: { level: 9 } });
-  const done = new Promise((resolve, reject) => {
-    output.on("close", resolve);
-    output.on("error", reject);
-    archive.on("error", reject);
-  });
-  archive.pipe(output);
-  archive.glob("**/*", {
-    dot: true,
-    nodir: true,
-    ignore: [
-      "**/node_modules/**",
-      "**/vendor/**",
-      "artifacts/**",
-      ".git/**",
-      ".vercel/**",
-      "**/.env",
-      "**/.env.*",
-      "coverage/**",
-      "**/dist/**",
-      "**/*.tsbuildinfo",
-      ".phpunit.result.cache",
-      "tmp/**",
-      "wordpress-test-core/**",
-      "wordpress-test-lib/**",
-    ],
-  });
-  // The example contains documented placeholders only and is intentionally
-  // restored after the broad environment-file exclusion above.
-  archive.file(".env.example", { name: ".env.example" });
-  await archive.finalize();
-  await done;
-}
-await zipSource();
-const expected = [
-  "editorial-publisher-for-chatgpt-1.0.1-source.zip",
-  "editorial-publisher-for-chatgpt-1.0.1.zip",
-  "sbom.cdx.json",
-];
+const execFileAsync = promisify(execFile);
+const { pluginZip, sourceZip } = await releaseMetadata();
+const { stdout } = await execFileAsync("git", ["ls-files", "-z"], {
+  encoding: "buffer",
+  maxBuffer: 16 * 1024 * 1024,
+});
+const trackedFiles = stdout.toString("utf8").split("\0").filter(Boolean);
+await writeReproducibleZip(
+  `artifacts/${sourceZip}`,
+  trackedFiles.map((source) => ({ source, name: source })),
+);
+const expected = [sourceZip, pluginZip, "sbom.cdx.json"];
 const available = new Set(await readdir("artifacts"));
 const names = expected.filter((name) => available.has(name));
 if (names.length !== expected.length)

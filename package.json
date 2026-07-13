@@ -1,6 +1,6 @@
 {
   "name": "wp-chatgpt-publisher",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "type": "module",
   "description": "Open-source ChatGPT app for secure WordPress editorial workflows without an OpenAI API key.",
@@ -38,6 +38,7 @@
     "php:test": "node scripts/php-tool.mjs run test",
     "package:wordpress": "node scripts/package-wordpress.mjs",
     "release:artifacts": "node scripts/release-artifacts.mjs",
+    "release:reproducible": "node scripts/check-reproducible-builds.mjs",
     "release:check": "node scripts/release-check.mjs",
     "sbom": "cyclonedx-npm --output-file artifacts/sbom.cdx.json --omit dev",
     "clean": "node scripts/clean.mjs"
