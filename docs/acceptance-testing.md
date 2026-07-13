@@ -2,7 +2,7 @@
 
 ## Status
 
-The complete product story passes against disposable WordPress, PostgreSQL, and the real Streamable HTTP MCP transport. Embedded UI surfaces pass desktop and 390px mobile browser QA. The public Vercel/Neon runtime passes protocol and persistence checks. The maintainer's ChatGPT Plus web account completes the production developer-mode OAuth, read, draft, and publish-review flows; the mobile-client pass remains account-gated.
+The complete product story passes against disposable WordPress, PostgreSQL, and the real Streamable HTTP MCP transport. Embedded UI surfaces pass desktop and 390px mobile browser QA. The public Vercel/Neon runtime passes protocol and persistence checks. The maintainer's ChatGPT Plus web account completes the production developer-mode OAuth, read, draft, and publish-review flows. Current OpenAI guidance says MCP apps are web-only, so mobile ChatGPT execution is not applicable. Recreating the app for the expanded desktop matrix is blocked only by the portal's owner-specific developer identity verification.
 
 ## Automated/live evidence
 
@@ -30,6 +30,6 @@ Screenshots:
 
 ## Production and developer-mode gate
 
-Vercel build `dpl_EmEngVt8DuaN5KGM3YS6riQjVSjS` is READY with a production-only Neon `free_v3` database. `/healthz` and `/readyz` return 200, OAuth dynamic registration and flow persistence succeed, the UI asset is cacheable with security headers, and unauthenticated `/mcp` returns the RFC 9728 challenge. ChatGPT developer-mode desktop acceptance against a disposable HTTPS WordPress site passes, including OAuth, read-only discovery, a safe draft, and a publish review that does not execute. See [the dated acceptance record](acceptance-chatgpt-2026-07-13.md). The remaining manual gate is the ChatGPT mobile-client pass.
+Vercel build `dpl_DLdGJQe1UsZRpt7dMXELpAeM9e1F` is READY with a production-only Neon `free_v3` database. `/healthz` and `/readyz` return 200, version `1.0.1` is public, OAuth metadata is healthy, the UI asset is cacheable with security headers, and unauthenticated `/mcp` returns the RFC 9728 challenge. ChatGPT developer-mode desktop acceptance against a disposable HTTPS WordPress site passes, including OAuth, read-only discovery, a safe draft, and a publish review that does not execute. See [the dated acceptance record](acceptance-chatgpt-2026-07-13.md). The automated real-MCP E2E passes every remaining editorial operation; repeating those operations manually inside ChatGPT requires the owner to complete the OpenAI developer identity prompt first.
 
 Do not store tokens, real personal data, or primary WordPress credentials in screenshots or logs.

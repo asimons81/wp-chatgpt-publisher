@@ -63,8 +63,16 @@ No assets may imply OpenAI endorsement, use unapproved brand treatments, contain
 - [ ] Tool scan matches production; annotations and security schemes are accurate.
 - [ ] Data types returned by tools are disclosed in the privacy policy.
 - [ ] Test prompts have deterministic expected results on the reviewer site.
-- [ ] Developer-mode desktop and mobile acceptance evidence is complete.
+- [ ] The expanded developer-mode desktop acceptance matrix is complete.
+- [x] Mobile MCP acceptance is not applicable; current OpenAI guidance says MCP apps are web-only.
 - [ ] Icons/screenshots/video are licensed and sanitized.
 - [ ] Owner confirms identity, legal terms, and clicks Submit.
 
-Account-gated final action: the repository owner must authenticate to the current OpenAI Developer Platform, enter final URLs/contact/company details, accept current legal confirmations, and submit. Do not claim acceptance or listing without portal evidence.
+## Smallest owner handoff
+
+1. Open `https://platform.openai.com/plugins`, choose **Create plugin → With MCP**, and complete the **Complete identity verification** prompt. The portal says a verified developer identity is required before creating or uploading a plugin; this is identity verification, not a paid plan selection.
+2. Create the development app with `https://editorial-publisher-for-chatgpt.vercel.app/mcp`, complete OAuth, and run the remaining desktop prompts for update, media, metadata, preview, schedule, publish, and revoke. The automated real-MCP E2E already passes these same operations.
+3. Supply and publish the final company/developer, privacy, terms, and support URLs and the disposable reviewer account details.
+4. In the OpenAI and WordPress.org portals, review the final legal confirmations and click Submit. Record the submission receipt/status; do not claim acceptance or listing until the portal provides evidence.
+
+The marketplace legal acceptance used to provision the production database was separate, explicitly on a no-cost plan, and is already complete. OpenAI identity verification and final submission legal confirmations remain account-owner actions.

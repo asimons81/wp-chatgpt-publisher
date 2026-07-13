@@ -32,7 +32,8 @@ This checklist is evidence-based. Automated/local verification is distinct from 
 - [x] ZIP, checksums, SBOM, source archive, and release notes have been regenerated after the final gate run.
 - [x] ChatGPT listing copy, reviewer workflow, privacy/terms templates, screenshots, and demo script are prepared.
 - [x] A durable production PostgreSQL database is connected and `/readyz` passes on public HTTPS.
-- [ ] Public repository, signed `v1.0.1` tag, GitHub Release, and downloadable release assets are published and evidenced.
+- [x] Public repository, annotated `v1.0.1` tag, GitHub Release, and downloadable release assets are published and evidenced.
 - [x] Manual ChatGPT developer-mode desktop acceptance is recorded.
-- [ ] Manual ChatGPT developer-mode mobile-client acceptance is recorded.
+- [x] Mobile-client execution is documented as not applicable because OpenAI currently supports MCP apps on web only.
+- [ ] The expanded manual desktop matrix is rerun after the owner completes OpenAI developer identity verification.
 - [ ] WordPress.org and OpenAI directory submissions are explicitly authorized and evidenced.

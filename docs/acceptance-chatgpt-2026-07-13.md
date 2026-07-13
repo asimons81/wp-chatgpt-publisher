@@ -14,6 +14,9 @@ The production MCP endpoint was installed as a personal developer-mode app in th
 | Consequential-action gate        | Pass    | ChatGPT rendered the publish review for post `106`, including site, author, status, category, word count, preview, and warning. It stopped without publishing.   |
 | Independent state check          | Pass    | WP-CLI reported post `106` as `draft` after the review.                                                                                                          |
 | Cleanup                          | Pass    | The disposable draft was deleted, ChatGPT was disconnected from the disposable site, the local URL and password were restored, and the HTTPS tunnel was stopped. |
-| ChatGPT mobile client            | Not run | The account-gated mobile-client pass remains for the owner; the embedded cards already pass 390 px browser QA.                                                   |
+| ChatGPT mobile client            | N/A     | Current OpenAI guidance says MCP apps are web-only; embedded cards separately pass 390 px browser QA.                                                            |
+| Expanded desktop matrix          | Blocked | The current OpenAI developer portal requires owner-specific developer identity verification before the app can be recreated or uploaded.                         |
 
 No real WordPress content or production credential was used. No OAuth token, WordPress password, or confirmation token is recorded in this evidence.
+
+On the final release audit, the signed-in OpenAI developer portal reached **Create plugin → With MCP** and then displayed **Complete identity verification**, stating that a verified developer identity is required before a plugin can be created or uploaded. The flow was cancelled before collecting identity data. After the owner completes that prompt, rerun draft update, image, metadata, preview, scheduling, publishing, and revocation inside ChatGPT; these operations already pass through the same production code path in the real-MCP E2E suite.
