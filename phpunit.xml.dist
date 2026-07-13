@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit bootstrap="tests/wordpress/bootstrap.php" colors="true" failOnWarning="true">
+  <testsuites>
+    <testsuite name="WordPress plugin"><directory>tests/wordpress</directory></testsuite>
+  </testsuites>
+</phpunit>

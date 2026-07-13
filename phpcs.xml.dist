@@ -1,0 +1,19 @@
+<?xml version="1.0"?>
+<ruleset name="Editorial Publisher for ChatGPT">
+  <description>WordPress coding standards for Editorial Publisher for ChatGPT.</description>
+  <file>wordpress/editorial-publisher-for-chatgpt</file>
+  <exclude-pattern>*/vendor/*</exclude-pattern>
+  <arg name="extensions" value="php"/>
+  <arg value="sp"/>
+  <rule ref="WordPress"/>
+  <rule ref="WordPress-Docs"/>
+  <rule ref="WordPress-Extra"/>
+  <rule ref="WordPress.WP.I18n">
+    <properties>
+      <property name="text_domain" type="array">
+        <element value="editorial-publisher-for-chatgpt"/>
+      </property>
+    </properties>
+  </rule>
+  <config name="minimum_supported_wp_version" value="6.9"/>
+</ruleset>

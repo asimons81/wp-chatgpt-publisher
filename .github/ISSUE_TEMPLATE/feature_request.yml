@@ -1,0 +1,21 @@
+name: Feature request
+description: Propose a focused editorial workflow improvement.
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: Problem, description: "What user workflow is blocked?" }
+    validations: { required: true }
+  - type: textarea
+    id: outcome
+    attributes: { label: Desired outcome }
+    validations: { required: true }
+  - type: textarea
+    id: security
+    attributes: { label: Permission, confirmation, security, and privacy impact }
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This does not require arbitrary code, SQL, filesystem, plugin, theme, settings, user administration, autonomous publishing, or permanent deletion.
+          required: true

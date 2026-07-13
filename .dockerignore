@@ -1,0 +1,14 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+node_modules
+vendor
+artifacts
+coverage
+**/dist
+**/*.tsbuildinfo
+*.log
+.phpunit.result.cache
+.DS_Store

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://playground.wordpress.net/blueprint-schema.json",
+  "preferredVersions": {
+    "php": "8.3",
+    "wp": "6.9"
+  },
+  "steps": [
+    {
+      "step": "runPHP",
+      "code": "<?php require '/wordpress/wp-load.php'; require_once ABSPATH . 'wp-admin/includes/file.php'; require_once ABSPATH . 'wp-admin/includes/plugin.php'; if (!WP_Filesystem()) { throw new RuntimeException('WordPress filesystem initialization failed.'); } $result = unzip_file('/tmp/wpcp-artifacts/editorial-publisher-for-chatgpt-1.0.0.zip', WP_PLUGIN_DIR); if (is_wp_error($result)) { throw new RuntimeException($result->get_error_message()); } $result = activate_plugin('editorial-publisher-for-chatgpt/editorial-publisher-for-chatgpt.php'); if (is_wp_error($result)) { throw new RuntimeException($result->get_error_message()); }"
+    },
+    {
+      "step": "runPHP",
+      "code": "<?php require '/wordpress/wp-load.php'; require_once ABSPATH . 'wp-admin/includes/plugin.php'; if (!is_plugin_active('editorial-publisher-for-chatgpt/editorial-publisher-for-chatgpt.php')) { throw new RuntimeException('Packaged plugin is not active.'); } do_action('rest_api_init'); $response = rest_do_request('/wp-chatgpt-publisher/v1/discovery'); $data = $response->get_data(); if (200 !== $response->get_status() || !is_array($data) || '1.0.0' !== ($data['version'] ?? null)) { throw new RuntimeException('Packaged discovery endpoint failed.'); } global $wpdb; foreach (array('connections','grants','audit','idempotency') as $suffix) { $table = $wpdb->prefix . 'wpcp_' . $suffix; if ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $table)) !== $table) { throw new RuntimeException('Missing table: ' . $suffix); } } echo 'WPCP_FRESH_ZIP_OK';"
+    }
+  ]
+}

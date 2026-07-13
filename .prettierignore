@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+vendor
+artifacts
+wordpress/editorial-publisher-for-chatgpt/languages
+LICENSE

@@ -1,0 +1,21 @@
+services:
+  wp-cli:
+    image: wordpress:cli-2.12-php8.3
+    depends_on:
+      wordpress-db:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+    environment:
+      WORDPRESS_DB_HOST: wordpress-db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WP_ENVIRONMENT_TYPE: local
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./wordpress/editorial-publisher-for-chatgpt:/var/www/html/wp-content/plugins/editorial-publisher-for-chatgpt:ro
+      - ./tests/fixtures:/fixtures:ro
+      - ./tests/fixtures/mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+    user: "33:33"
+    entrypoint: ["wp"]

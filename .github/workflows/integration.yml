@@ -1,0 +1,71 @@
+name: Integration
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions: { contents: read }
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  stack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: minimum
+            wordpress_image: wordpress:6.9-php8.3-apache
+          - label: latest
+            wordpress_image: wordpress:latest
+    env:
+      WORDPRESS_IMAGE: ${{ matrix.wordpress_image }}
+      WPCP_TEST_WP_URL: http://wordpress.lvh.me:8080
+      WPCP_TEST_WP_USER: admin
+      WPCP_TEST_WP_PASSWORD: local-test-admin
+      WPCP_TEST_EDITORIAL_TOKEN: wpcp-editorial-test-token-000000000000000000000000
+      WPCP_TEST_PUBLISHER_TOKEN: wpcp-publisher-test-token-000000000000000000000000
+      WPCP_TEST_MCP_BASE_URL: http://publisher.lvh.me:8787
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: cp .env.example .env
+      - run: |
+          sed -i "s|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=http://publisher.lvh.me:8787|" .env
+          sed -i "s|^WPCP_ENCRYPTION_KEY=.*|WPCP_ENCRYPTION_KEY=$(openssl rand -base64 32)|" .env
+          sed -i "s|^WPCP_TOKEN_SIGNING_KEY=.*|WPCP_TOKEN_SIGNING_KEY=$(openssl rand -base64 32)|" .env
+          sed -i "s|^ALLOW_PRIVATE_NETWORKS_IN_DEVELOPMENT=.*|ALLOW_PRIVATE_NETWORKS_IN_DEVELOPMENT=true|" .env
+      - run: docker compose -f docker-compose.yml -f docker-compose.test.yml up -d --build
+      - run: node scripts/wait-for-http.mjs http://127.0.0.1:8080 120000
+      - run: >-
+          docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm wp-cli
+          core install --url=http://wordpress.lvh.me:8080 --title="Editorial Publisher Test"
+          --admin_user=admin --admin_password=local-test-admin
+          --admin_email=admin@example.test --skip-email
+      - run: >-
+          docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm wp-cli
+          eval-file /fixtures/seed-wordpress.php
+      - run: node scripts/wait-for-http.mjs http://127.0.0.1:8787/readyz 120000
+      - run: npm run test:integration
+      - run: npm run test:e2e
+      - run: npm run test:security
+      - run: >-
+          docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm
+          -e WPCP_LIFECYCLE_ACTION=upgrade wp-cli eval-file /fixtures/verify-lifecycle.php
+      - run: >-
+          docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm
+          -e WPCP_LIFECYCLE_ACTION=preserve wp-cli eval-file /fixtures/verify-lifecycle.php
+      - run: >-
+          docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm
+          -e WPCP_LIFECYCLE_ACTION=remove wp-cli eval-file /fixtures/verify-lifecycle.php
+      - if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.test.yml logs --no-color > integration-stack.log
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: "integration-logs-${{ matrix.label }}", path: integration-stack.log }
+      - if: always()
+        run: docker compose -f docker-compose.yml -f docker-compose.test.yml down -v

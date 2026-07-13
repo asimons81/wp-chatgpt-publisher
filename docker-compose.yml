@@ -1,0 +1,72 @@
+services:
+  wordpress-db:
+    image: mariadb:11.8
+    environment:
+      MARIADB_DATABASE: wordpress
+      MARIADB_USER: wordpress
+      MARIADB_PASSWORD: wordpress
+      MARIADB_ROOT_PASSWORD: local-root-only
+    volumes:
+      - wordpress_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  wordpress:
+    image: "${WORDPRESS_IMAGE:-wordpress:6.9-php8.3-apache}"
+    depends_on:
+      wordpress-db:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    environment:
+      WORDPRESS_DB_HOST: wordpress-db
+      WORDPRESS_DB_USER: wordpress
+      WORDPRESS_DB_PASSWORD: wordpress
+      WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_DEBUG: "1"
+      WORDPRESS_CONFIG_EXTRA: |
+        define('WP_ENVIRONMENT_TYPE', 'local');
+    extra_hosts:
+      - "publisher.lvh.me:host-gateway"
+    volumes:
+      - wordpress_data:/var/www/html
+      - ./wordpress/editorial-publisher-for-chatgpt:/var/www/html/wp-content/plugins/editorial-publisher-for-chatgpt:ro
+      - ./tests/fixtures/mu-plugins:/var/www/html/wp-content/mu-plugins:ro
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: wpcp
+      POSTGRES_USER: wpcp
+      POSTGRES_PASSWORD: wpcp
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wpcp"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mcp-server:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+    ports:
+      - "${MCP_HOST_PORT:-8787}:8787"
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://wpcp:wpcp@postgres:5432/wpcp
+      PORT: 8787
+    extra_hosts:
+      - "wordpress.lvh.me:host-gateway"
+
+volumes:
+  wordpress_db:
+  wordpress_data:
+  postgres_data:

@@ -1,0 +1,58 @@
+{
+  "name": "wp-chatgpt-publisher",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Open-source ChatGPT app for secure WordPress editorial workflows without an OpenAI API key.",
+  "license": "GPL-2.0-or-later",
+  "engines": {
+    "node": "24.x",
+    "npm": "11.x"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @wp-chatgpt-publisher/contracts && npm run build -w @wp-chatgpt-publisher/tool-schemas && concurrently -n server,ui -c cyan,magenta \"npm run dev -w @wp-chatgpt-publisher/server\" \"npm run dev -w @wp-chatgpt-publisher/chatgpt-ui\"",
+    "build": "npm run build --workspace @wp-chatgpt-publisher/contracts && npm run build --workspace @wp-chatgpt-publisher/tool-schemas && npm run build --workspace @wp-chatgpt-publisher/test-fixtures && npm run build --workspace @wp-chatgpt-publisher/chatgpt-ui && npm run build --workspace @wp-chatgpt-publisher/server",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint . && npm run php:lint",
+    "typecheck": "npm run typecheck --workspaces --if-present && tsc -p api/tsconfig.json",
+    "test": "vitest run --coverage",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "vitest run tests/e2e",
+    "test:security": "vitest run tests/security",
+    "php:lint": "node scripts/php-lint.mjs",
+    "php:install": "node scripts/php-tool.mjs install --no-interaction --prefer-dist",
+    "php:cs": "node scripts/php-tool.mjs run phpcs",
+    "php:stan": "node scripts/php-tool.mjs run phpstan",
+    "php:test": "node scripts/php-tool.mjs run test",
+    "package:wordpress": "node scripts/package-wordpress.mjs",
+    "release:artifacts": "node scripts/release-artifacts.mjs",
+    "release:check": "node scripts/release-check.mjs",
+    "sbom": "cyclonedx-npm --output-file artifacts/sbom.cdx.json --omit dev",
+    "clean": "node scripts/clean.mjs"
+  },
+  "devDependencies": {
+    "@cyclonedx/cyclonedx-npm": "latest",
+    "@eslint/js": "latest",
+    "@types/cors": "2.8.19",
+    "@types/express": "5.0.6",
+    "@types/node": "latest",
+    "@types/pg": "8.20.0",
+    "@vitest/coverage-v8": "latest",
+    "archiver": "8.0.0",
+    "concurrently": "latest",
+    "eslint": "latest",
+    "eslint-plugin-security": "latest",
+    "globals": "latest",
+    "prettier": "latest",
+    "tsx": "4.23.0",
+    "typescript": "latest",
+    "typescript-eslint": "latest",
+    "vitest": "latest"
+  }
+}

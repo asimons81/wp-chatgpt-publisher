@@ -1,0 +1,32 @@
+name: Bug report
+description: Report reproducible incorrect behavior without sharing sensitive data.
+body:
+  - type: markdown
+    attributes:
+      {
+        value: "Do not include tokens, passwords, authorization headers, personal data, or private article content. Security issues belong in private vulnerability reporting.",
+      }
+  - type: input
+    id: version
+    attributes: { label: Version, placeholder: "1.0.0" }
+    validations: { required: true }
+  - type: textarea
+    id: environment
+    attributes:
+      { label: Environment, description: "WordPress, PHP, Node, hosting, browser/ChatGPT surface" }
+    validations: { required: true }
+  - type: textarea
+    id: steps
+    attributes: { label: Reproduction steps }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: Expected and actual behavior }
+    validations: { required: true }
+  - type: input
+    id: request
+    attributes:
+      {
+        label: Sanitized request ID,
+        description: "Request IDs are safe; do not paste logs containing content or credentials.",
+      }

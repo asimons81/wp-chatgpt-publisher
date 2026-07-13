@@ -1,0 +1,32 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+  id-token: write
+jobs:
+  artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, cache: npm }
+      - run: npm ci
+      - run: npm run format:check && npm run typecheck && npm run lint && npm test && npm run build
+      - run: npm run package:wordpress
+      - run: npm run sbom
+      - run: npm run release:artifacts
+      - run: npm run release:check
+      - uses: actions/upload-artifact@v4
+        with: { name: release-artifacts, path: artifacts/, if-no-files-found: error }
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: |
+            artifacts/editorial-publisher-for-chatgpt-1.0.0.zip
+            artifacts/editorial-publisher-for-chatgpt-1.0.0-source.zip
+            artifacts/sbom.cdx.json
+            artifacts/SHA256SUMS

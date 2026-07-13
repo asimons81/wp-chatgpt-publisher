@@ -1,0 +1,30 @@
+{
+  "name": "@wp-chatgpt-publisher/server",
+  "version": "1.0.0",
+  "type": "module",
+  "license": "GPL-2.0-or-later",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "latest",
+    "@modelcontextprotocol/sdk": "latest",
+    "@wp-chatgpt-publisher/contracts": "1.0.0",
+    "@wp-chatgpt-publisher/tool-schemas": "1.0.0",
+    "cors": "latest",
+    "express": "latest",
+    "express-rate-limit": "latest",
+    "helmet": "latest",
+    "ipaddr.js": "latest",
+    "jose": "latest",
+    "pg": "latest",
+    "pino": "latest",
+    "pino-http": "latest",
+    "undici": "latest",
+    "zod": "latest"
+  }
+}

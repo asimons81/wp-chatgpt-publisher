@@ -1,0 +1,153 @@
+.wpcp-wrap {
+  max-width: 1180px;
+}
+.wpcp-lead {
+  max-width: 760px;
+  color: #50575e;
+  font-size: 15px;
+}
+.wpcp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 22px 0;
+}
+.wpcp-card {
+  box-sizing: border-box;
+  padding: 22px;
+  border: 1px solid #c3c4c7;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.035);
+}
+.wpcp-card--wide {
+  grid-column: 1/-1;
+}
+.wpcp-card h2 {
+  margin: 6px 0 8px;
+}
+.wpcp-kicker {
+  color: #16734b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.wpcp-metric {
+  display: block;
+  margin-top: 6px;
+  font-size: 42px;
+  line-height: 1;
+}
+.wpcp-stack {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+.wpcp-connection,
+.wpcp-check {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+.wpcp-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.wpcp-status {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.wpcp-status.is-active {
+  background: #e6f4ec;
+  color: #0f5b3a;
+}
+.wpcp-status.is-revoked {
+  background: #fff0f0;
+  color: #9d2d2d;
+}
+.wpcp-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.wpcp-scopes code {
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: #f0f0f1;
+}
+.wpcp-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 16px 0 22px;
+}
+.wpcp-checks label {
+  padding: 10px;
+  border: 1px solid #dcdcde;
+  border-radius: 6px;
+}
+.wpcp-form {
+  max-width: 820px;
+  margin-top: 20px;
+}
+.wpcp-form > .button {
+  margin-right: 7px;
+}
+.wpcp-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 18px;
+}
+.wpcp-details dt {
+  font-weight: 600;
+}
+.wpcp-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.wpcp-empty {
+  padding: 38px;
+  border: 1px dashed #a7aaad;
+  border-radius: 10px;
+  text-align: center;
+}
+.wpcp-table-wrap {
+  overflow: auto;
+}
+.wpcp-table-wrap code {
+  font-size: 11px;
+}
+@media (max-width: 782px) {
+  .wpcp-wrap .button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+  }
+  .wpcp-grid {
+    grid-template-columns: 1fr;
+  }
+  .wpcp-card--wide {
+    grid-column: auto;
+  }
+  .wpcp-connection,
+  .wpcp-check {
+    flex-direction: column;
+  }
+  .wpcp-actions {
+    width: 100%;
+  }
+  .wpcp-actions .button {
+    width: 100%;
+    text-align: center;
+  }
+  .wpcp-checks {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title description">
+  <title id="title">Editorial Publisher for ChatGPT icon</title>
+  <desc id="description">An editorial document inside a conversation bubble with a confirmation check.</desc>
+  <rect width="1024" height="1024" rx="216" fill="#123429" />
+  <rect x="30" y="30" width="964" height="964" rx="192" fill="none" stroke="#2f6852" stroke-width="12" />
+  <path
+    d="M220 238c0-42 34-76 76-76h432c42 0 76 34 76 76v390c0 42-34 76-76 76H506L368 842V704h-72c-42 0-76-34-76-76V238Z"
+    fill="#f5f2e8"
+  />
+  <rect x="326" y="286" width="372" height="48" rx="24" fill="#1f6d4b" />
+  <rect x="326" y="386" width="290" height="36" rx="18" fill="#98aa9f" />
+  <rect x="326" y="466" width="330" height="36" rx="18" fill="#98aa9f" />
+  <rect x="326" y="546" width="210" height="36" rx="18" fill="#98aa9f" />
+  <circle cx="708" cy="690" r="128" fill="#e8b85a" stroke="#123429" stroke-width="24" />
+  <path
+    d="m642 690 42 43 90-96"
+    fill="none"
+    stroke="#123429"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="38"
+  />
+</svg>
