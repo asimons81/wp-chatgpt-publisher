@@ -58,6 +58,10 @@ export function redactSecrets(value: string): string {
   return value
     .replace(/Bearer\s+[A-Za-z0-9._~+/-]+=*/gi, "Bearer [REDACTED]")
     .replace(
+      /([?&](?:access_token|refresh_token|authorization|client_secret|credential|password|secret|token|code|grant|request|state|flow)=)[^&#\s]+/gi,
+      "$1[REDACTED]",
+    )
+    .replace(
       /\b(?:access|refresh|authorization|credential|password|secret)[_-]?token?\s*[=:]\s*[^\s,;]+/gi,
       "secret=[REDACTED]",
     );

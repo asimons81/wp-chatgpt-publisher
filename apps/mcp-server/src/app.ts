@@ -12,7 +12,12 @@ import { config } from "./config.js";
 import { AppError, toAppError } from "./errors.js";
 import { createOAuthRouter } from "./auth/oauth.js";
 import { challengeHeader, requireAccessToken } from "./auth/middleware.js";
-import { logger } from "./logger.js";
+import {
+  errorLogSerializer,
+  logger,
+  requestLogSerializer,
+  responseLogSerializer,
+} from "./logger.js";
 import { McpService } from "./mcp/server.js";
 import { HttpMetrics } from "./observability.js";
 import type { Repository } from "./storage/repository.js";
@@ -30,6 +35,12 @@ export function createApp(repository: Repository) {
           ? request.headers["x-request-id"]
           : randomUUID(),
       customProps: (request) => ({ requestId: request.id }),
+      wrapSerializers: false,
+      serializers: {
+        err: errorLogSerializer,
+        req: requestLogSerializer,
+        res: responseLogSerializer,
+      },
     }),
   );
   app.use(
