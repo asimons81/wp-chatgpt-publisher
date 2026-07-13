@@ -8,7 +8,7 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 
 - Returned a safe 400 validation response for malformed JSON instead of misclassifying it as a retryable upstream failure.
 - Prevented OAuth grants, authorization codes, signed connection requests, and other query-string credentials from appearing in structured request or redirect-response logs.
-- Made WordPress and source ZIPs byte-for-byte reproducible by normalizing entry order, timestamps, path separators, and file modes.
+- Made WordPress and source ZIPs byte-for-byte reproducible across host operating systems by archiving committed Git blobs and normalizing entry order, timestamps, path separators, file modes, and compression behavior.
 - Derived archive names and release validation from the root package version instead of duplicating version literals across packaging scripts and workflows.
 
 ### Documentation

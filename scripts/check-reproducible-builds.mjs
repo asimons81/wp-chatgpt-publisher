@@ -1,7 +1,7 @@
 /* eslint-disable security/detect-non-literal-fs-filename -- Artifact names come from validated release metadata. */
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFile, stat, utimes } from "node:fs/promises";
+import { readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { promisify } from "node:util";
 import { releaseMetadata } from "./release-metadata.mjs";
 
@@ -11,6 +11,9 @@ const pluginArtifact = `artifacts/${pluginZip}`;
 const sourceArtifact = `artifacts/${sourceZip}`;
 const timestampProbe = "wordpress/editorial-publisher-for-chatgpt/readme.txt";
 const originalTimes = await stat(timestampProbe);
+const sourceWorkingTreeProbe = ".gitignore";
+const originalSourceWorkingTree = await readFile(sourceWorkingTreeProbe);
+const originalSourceTimes = await stat(sourceWorkingTreeProbe);
 
 async function buildArchives() {
   await execFileAsync(process.execPath, ["scripts/package-wordpress.mjs"]);
@@ -33,6 +36,10 @@ try {
   };
 
   await utimes(timestampProbe, originalTimes.atime, new Date("2040-01-01T00:00:00.000Z"));
+  await writeFile(
+    sourceWorkingTreeProbe,
+    Buffer.concat([originalSourceWorkingTree, Buffer.from("working-tree-probe")]),
+  );
   await buildArchives();
   second = {
     plugin: await digest(pluginArtifact),
@@ -40,6 +47,8 @@ try {
   };
 } finally {
   await utimes(timestampProbe, originalTimes.atime, originalTimes.mtime);
+  await writeFile(sourceWorkingTreeProbe, originalSourceWorkingTree);
+  await utimes(sourceWorkingTreeProbe, originalSourceTimes.atime, originalSourceTimes.mtime);
 }
 
 if (first.plugin !== second.plugin || first.source !== second.source) {

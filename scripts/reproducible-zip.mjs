@@ -21,7 +21,10 @@ export async function writeReproducibleZip(target, entries) {
   await rm(target, { force: true });
 
   const output = createWriteStream(target);
-  const archive = new ZipArchive({ forceLocalTime: false, zlib: { level: 9 } });
+  // STORE avoids implementation-dependent DEFLATE output across operating
+  // systems and zlib versions. These release archives are small enough that
+  // byte stability is more valuable than compression.
+  const archive = new ZipArchive({ forceLocalTime: false, store: true });
   const completed = new Promise((resolve, reject) => {
     output.on("close", resolve);
     output.on("error", reject);
@@ -34,7 +37,8 @@ export async function writeReproducibleZip(target, entries) {
     if (!name || name.includes("../") || name.endsWith("/..")) {
       throw new Error(`Unsafe archive entry name: ${entry.name}`);
     }
-    archive.append(await readFile(entry.source), {
+    const contents = entry.data ?? (await readFile(entry.source));
+    archive.append(contents, {
       name,
       date: ZIP_EPOCH,
       mode: 0o100644,

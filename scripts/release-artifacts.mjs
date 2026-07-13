@@ -7,15 +7,24 @@ import { writeReproducibleZip } from "./reproducible-zip.mjs";
 
 const execFileAsync = promisify(execFile);
 const { pluginZip, sourceZip } = await releaseMetadata();
-const { stdout } = await execFileAsync("git", ["ls-files", "-z"], {
-  encoding: "buffer",
-  maxBuffer: 16 * 1024 * 1024,
-});
-const trackedFiles = stdout.toString("utf8").split("\0").filter(Boolean);
-await writeReproducibleZip(
-  `artifacts/${sourceZip}`,
-  trackedFiles.map((source) => ({ source, name: source })),
+const { stdout } = await execFileAsync(
+  "git",
+  ["ls-tree", "--full-tree", "-r", "--name-only", "-z", "HEAD"],
+  {
+    encoding: "buffer",
+    maxBuffer: 16 * 1024 * 1024,
+  },
 );
+const trackedFiles = stdout.toString("utf8").split("\0").filter(Boolean);
+const sourceEntries = [];
+for (const source of trackedFiles) {
+  const { stdout: data } = await execFileAsync("git", ["cat-file", "blob", `HEAD:${source}`], {
+    encoding: "buffer",
+    maxBuffer: 64 * 1024 * 1024,
+  });
+  sourceEntries.push({ data, name: source });
+}
+await writeReproducibleZip(`artifacts/${sourceZip}`, sourceEntries);
 const expected = [sourceZip, pluginZip, "sbom.cdx.json"];
 const available = new Set(await readdir("artifacts"));
 const names = expected.filter((name) => available.has(name));
