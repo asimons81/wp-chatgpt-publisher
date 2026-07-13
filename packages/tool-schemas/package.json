@@ -17,9 +17,9 @@
   },
   "dependencies": {
     "@wp-chatgpt-publisher/contracts": "1.0.2",
-    "zod": "latest"
+    "zod": "4.4.3"
   },
   "devDependencies": {
-    "typescript": "latest"
+    "typescript": "*"
   }
 }
