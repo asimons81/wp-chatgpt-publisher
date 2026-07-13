@@ -25,6 +25,6 @@
     "pino": "latest",
     "pino-http": "latest",
     "undici": "latest",
-    "zod": "latest"
+    "zod": "4.4.3"
   }
 }
