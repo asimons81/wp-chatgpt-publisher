@@ -30,7 +30,7 @@ jobs:
       WPCP_TEST_MCP_BASE_URL: http://publisher.lvh.me:8787
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
       - run: npm ci
       - run: cp .env.example .env
