@@ -12,6 +12,7 @@ Milestone 11 - v1.0.1 released; account-gated developer identity and directory s
 - Responsive ChatGPT cards and WordPress admin surfaces with desktop/mobile browser QA.
 - Fresh ZIP installation, official Plugin Check, Docker image/readiness, real OAuth/MCP/WordPress integration, complete editorial E2E, and lifecycle verification.
 - Vercel Node function and a no-cost Neon PostgreSQL resource deployed at `editorial-publisher-for-chatgpt.vercel.app`.
+- Public signed `1.0.1` container image published for AMD64 and ARM64 at `ghcr.io/asimons81/wp-chatgpt-publisher`.
 
 ## Latest verified test evidence
 
@@ -27,6 +28,7 @@ Milestone 11 - v1.0.1 released; account-gated developer identity and directory s
 - Public production verification: health, readiness, version, OAuth metadata, dynamic client registration, authorization persistence, Apps SDK asset delivery, and the MCP OAuth challenge pass over HTTPS.
 - GitHub Actions at tagged commit `478c3ec`: CI `29228961676`, security `29228961675`, minimum/latest WordPress integration `29228961694`, and release artifact workflow `29229332426` pass.
 - ChatGPT Plus web developer mode: production OAuth, connected-site/content reads, safe draft creation, and the non-executing publish review pass against a disposable HTTPS WordPress site.
+- Container workflow `29229977161`: multi-platform build, public GHCR push, and SLSA provenance attestation pass. An anonymous pull of digest `sha256:4c44873b2e5abb050fdfde0763fd1bf15ce12cc4da34a02d16c033afec1417d5` starts as the non-root `app` user and passes `/healthz`, `/readyz`, and `/version` against disposable PostgreSQL.
 
 ## Deployment state
 
@@ -35,6 +37,7 @@ Milestone 11 - v1.0.1 released; account-gated developer identity and directory s
 - `/healthz`, `/readyz`, `/version`, both OAuth metadata documents, the Apps SDK UI asset, and the MCP 401 challenge return the expected public responses.
 - Encryption/signing keys, exact ChatGPT origin, telemetry-off, and the public base URL are configured in Vercel without committing their values.
 - Public source repository and verified `v1.0.1` release assets are available at `github.com/asimons81/wp-chatgpt-publisher/releases/tag/v1.0.1`; downloaded assets match `SHA256SUMS`, and the public plugin ZIP installs in fresh WordPress Playground.
+- Public container tags `1.0.1`, `latest`, and the release source SHA resolve to the same signed multi-platform image; embedded provenance verifies against `.github/workflows/container.yml`.
 
 ## Known issues and limitations
 
