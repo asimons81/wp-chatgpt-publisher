@@ -55,7 +55,7 @@ Upload `artifacts/editorial-publisher-for-chatgpt-1.0.2.zip` through **Plugins >
 
 The service requires PostgreSQL and two independent 32-byte secrets. Supported paths:
 
-- Published multi-platform image: `ghcr.io/asimons81/wp-chatgpt-publisher:1.0.1`
+- Published multi-platform image: `ghcr.io/asimons81/wp-chatgpt-publisher:1.0.2`
 - A locally built OCI image from the included `Dockerfile`
 - Docker Compose for the complete local topology
 - Standard Node host: `npm ci && npm run build && node apps/mcp-server/dist/index.js`
@@ -101,6 +101,7 @@ npm run test:security
 npm run build
 npm run package:wordpress
 npm run sbom
+npm run release:reproducible
 npm run release:artifacts
 npm run release:check
 ```
@@ -115,7 +116,7 @@ Multisite, WordPress.com hosted plans, headless sites, disabled REST APIs, produ
 
 ## Release status
 
-All local implementation, packaging, security, full-stack, lifecycle, and browser gates pass. The public Vercel service is live and ready on durable PostgreSQL, and the signed `1.0.1` container image is publicly available for AMD64 and ARM64. ChatGPT desktop developer-mode OAuth/read/draft/publish-review acceptance passes. Current OpenAI guidance says MCP apps are web-only, so mobile-client acceptance is not applicable. The expanded desktop pass and directory submissions are account-gated by OpenAI developer identity verification and the owner's final legal/contact details; see [project status](docs/status.md) and the [release checklist](docs/release-checklist.md).
+All local implementation, packaging, security, full-stack, lifecycle, and browser gates pass. The public Vercel service reports version `1.0.2` on durable PostgreSQL, and the signed `1.0.2` container image is publicly available for AMD64 and ARM64. The public WordPress and source ZIPs match local deterministic builds byte for byte. ChatGPT desktop developer-mode OAuth/read/draft/publish-review acceptance passes. Current OpenAI guidance says MCP apps are web-only, so mobile-client acceptance is not applicable. The expanded desktop pass and directory submissions are account-gated by OpenAI developer identity verification and the owner's final legal/contact details; see [project status](docs/status.md) and the [release checklist](docs/release-checklist.md).
 
 ## License
 

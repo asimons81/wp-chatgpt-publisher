@@ -11,19 +11,19 @@ Production requires `PUBLIC_BASE_URL`, a durable PostgreSQL `DATABASE_URL`, and 
 Pull the public AMD64/ARM64 release image:
 
 ```sh
-docker pull ghcr.io/asimons81/wp-chatgpt-publisher:1.0.1
+docker pull ghcr.io/asimons81/wp-chatgpt-publisher:1.0.2
 ```
 
-For a deployment locked to the verified release, use `ghcr.io/asimons81/wp-chatgpt-publisher@sha256:4c44873b2e5abb050fdfde0763fd1bf15ce12cc4da34a02d16c033afec1417d5`. Verify its GitHub Actions provenance with:
+For a deployment locked to the verified release, use `ghcr.io/asimons81/wp-chatgpt-publisher@sha256:e8043aceeab927237df9a96d1d22ac1e803498c9f12ce968d2ac147d5705c9a9`. Verify its GitHub Actions provenance with:
 
 ```sh
-gh attestation verify oci://ghcr.io/asimons81/wp-chatgpt-publisher:1.0.1 \
+gh attestation verify oci://ghcr.io/asimons81/wp-chatgpt-publisher:1.0.2 \
   --repo asimons81/wp-chatgpt-publisher \
   --bundle-from-oci \
   --signer-workflow asimons81/wp-chatgpt-publisher/.github/workflows/container.yml
 ```
 
-Alternatively, build from source with `docker build -t editorial-publisher-for-chatgpt:1.0.1 .`. Run either image as the included non-root `app` user with PostgreSQL and secrets supplied from a protected store. Expose only the application port behind TLS. Verify both `/healthz` and `/readyz`.
+Alternatively, build from source with `docker build -t editorial-publisher-for-chatgpt:1.0.2 .`. Run either image as the included non-root `app` user with PostgreSQL and secrets supplied from a protected store. Expose only the application port behind TLS. Verify both `/healthz` and `/readyz`.
 
 ### Docker Compose
 

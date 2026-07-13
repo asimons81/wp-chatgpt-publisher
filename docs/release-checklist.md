@@ -15,6 +15,7 @@ This checklist is evidence-based. Automated/local verification is distinct from 
 - [x] SSRF, upload, replay, idempotency, horizontal access, output escaping, and CSRF controls pass automated checks or live negative cases.
 - [x] Production refuses missing PostgreSQL, encryption/signing keys, or non-HTTPS public configuration.
 - [x] Logs, fixtures, screenshots, and packaged artifacts contain no credentials or article bodies.
+- [x] Real HTTP log probes and production logs exclude OAuth/query credentials; malformed JSON returns a safe 400 validation response.
 - [x] Production dependency audit reports no known vulnerabilities.
 
 ## Quality
@@ -28,11 +29,12 @@ This checklist is evidence-based. Automated/local verification is distinct from 
 
 ## Release
 
-- [x] Version is 1.0.1 in product metadata and the changelog is current.
+- [x] Version is 1.0.2 in product metadata and the changelog is current.
+- [x] WordPress and source ZIPs reproduce byte for byte across checkout timestamps, working-tree normalization, operating systems, and compression-library differences.
 - [x] ZIP, checksums, SBOM, source archive, and release notes have been regenerated after the final gate run.
 - [x] ChatGPT listing copy, reviewer workflow, privacy/terms templates, screenshots, and demo script are prepared.
 - [x] A durable production PostgreSQL database is connected and `/readyz` passes on public HTTPS.
-- [x] Public repository, annotated `v1.0.1` tag, GitHub Release, and downloadable release assets are published and evidenced.
+- [x] Public repository, annotated `v1.0.2` tag, GitHub Release, and downloadable release assets are published and evidenced.
 - [x] Public AMD64/ARM64 container image, immutable digest, anonymous pull, runtime readiness, and signed provenance are published and evidenced.
 - [x] Manual ChatGPT developer-mode desktop acceptance is recorded.
 - [x] Mobile-client execution is documented as not applicable because OpenAI currently supports MCP apps on web only.
