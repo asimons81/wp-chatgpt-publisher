@@ -1,6 +1,6 @@
 {
   "name": "@wp-chatgpt-publisher/tool-schemas",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "license": "GPL-2.0-or-later",
   "main": "./dist/index.js",
@@ -16,7 +16,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@wp-chatgpt-publisher/contracts": "1.0.0",
+    "@wp-chatgpt-publisher/contracts": "1.0.1",
     "zod": "latest"
   },
   "devDependencies": {

@@ -5,7 +5,7 @@ import { ZipArchive } from "archiver";
 
 await mkdir("artifacts", { recursive: true });
 async function zipSource() {
-  const target = "artifacts/editorial-publisher-for-chatgpt-1.0.0-source.zip";
+  const target = "artifacts/editorial-publisher-for-chatgpt-1.0.1-source.zip";
   await rm(target, { force: true });
   const output = createWriteStream(target);
   const archive = new ZipArchive({ zlib: { level: 9 } });
@@ -43,8 +43,8 @@ async function zipSource() {
 }
 await zipSource();
 const expected = [
-  "editorial-publisher-for-chatgpt-1.0.0-source.zip",
-  "editorial-publisher-for-chatgpt-1.0.0.zip",
+  "editorial-publisher-for-chatgpt-1.0.1-source.zip",
+  "editorial-publisher-for-chatgpt-1.0.1.zip",
   "sbom.cdx.json",
 ];
 const available = new Set(await readdir("artifacts"));

@@ -33,7 +33,7 @@ live("live WordPress REST integration", () => {
   it("discovers the installed plugin publicly", async () => {
     const { response, data } = await call("/discovery", null, undefined, "GET");
     expect(response.status).toBe(200);
-    expect(data.version).toBe("1.0.0");
+    expect(data.version).toBe("1.0.1");
   });
   it("rejects missing authentication", async () => {
     const { response } = await call("/site", null, undefined, "GET");

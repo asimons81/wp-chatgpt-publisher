@@ -8,7 +8,7 @@ Production requires `PUBLIC_BASE_URL`, a durable PostgreSQL `DATABASE_URL`, and 
 
 ### Docker
 
-Build with `docker build -t editorial-publisher-for-chatgpt:1.0.0 .`, then run as a non-root workload with PostgreSQL and secrets supplied from a protected store. Expose only the application port behind TLS. Verify both `/healthz` and `/readyz`.
+Build with `docker build -t editorial-publisher-for-chatgpt:1.0.1 .`, then run as a non-root workload with PostgreSQL and secrets supplied from a protected store. Expose only the application port behind TLS. Verify both `/healthz` and `/readyz`.
 
 ### Docker Compose
 
@@ -29,7 +29,11 @@ The repository contains `api/index.ts` and `vercel.json` for the Node 24 runtime
 5. Run `vercel deploy --prod`.
 6. Verify `/healthz`, `/readyz`, `/version`, both OAuth metadata endpoints, `/ui/assets/app.js`, and an unauthenticated `/mcp` OAuth challenge.
 
-The checked release candidate built remotely and received the stable alias `editorial-publisher-for-chatgpt.vercel.app`; it deliberately remains unready until its owner connects PostgreSQL. Vercel is optional and no application feature depends on a proprietary relay.
+The public deployment at `editorial-publisher-for-chatgpt.vercel.app` uses durable PostgreSQL and passes health, readiness, OAuth, MCP challenge, and UI-asset probes. Vercel is optional and no application feature depends on a proprietary relay.
+
+## Observability
+
+Structured logs include request IDs and tool-operation records with hashed connection identifiers, tool names, durations, outcomes, WordPress response categories, and retry counts. Content bodies and credential-shaped fields are excluded or redacted. Set `METRICS_ENABLED=true` to expose Prometheus-compatible HTTP counters and duration totals at `/metrics`; labels are limited to HTTP method and status class. Metrics and optional telemetry are disabled by default.
 
 ## Backups, rotation, and deletion
 

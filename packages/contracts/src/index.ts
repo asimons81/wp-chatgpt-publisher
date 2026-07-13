@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const PRODUCT_NAME = "Editorial Publisher for ChatGPT";
 export const PRODUCT_SLUG = "wp-chatgpt-publisher";
-export const VERSION = "1.0.0";
+export const VERSION = "1.0.1";
 export const REST_NAMESPACE = "wp-chatgpt-publisher/v1";
 
 export const SCOPES = [

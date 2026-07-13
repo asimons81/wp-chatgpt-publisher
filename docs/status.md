@@ -34,7 +34,7 @@ Milestone 11 - v1.0 release publication and account-gated directory acceptance.
 - Neon resource `editorial-publisher-production` is Available on the explicit `free_v3` billing plan and provides encrypted production-only PostgreSQL variables.
 - `/healthz`, `/readyz`, `/version`, both OAuth metadata documents, the Apps SDK UI asset, and the MCP 401 challenge return the expected public responses.
 - Encryption/signing keys, exact ChatGPT origin, telemetry-off, and the public base URL are configured in Vercel without committing their values.
-- Public source repository and verified `v1.0.0` release assets are available at `github.com/asimons81/wp-chatgpt-publisher`.
+- Public source repository and verified `v1.0.0` release assets are available at `github.com/asimons81/wp-chatgpt-publisher`; the `v1.0.1` observability patch is undergoing final gates.
 
 ## External actions still required
 

@@ -7,16 +7,19 @@ import helmet from "helmet";
 import { pinoHttp } from "pino-http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+import { VERSION } from "@wp-chatgpt-publisher/contracts";
 import { config } from "./config.js";
 import { AppError, toAppError } from "./errors.js";
 import { createOAuthRouter } from "./auth/oauth.js";
 import { challengeHeader, requireAccessToken } from "./auth/middleware.js";
 import { logger } from "./logger.js";
 import { McpService } from "./mcp/server.js";
+import { HttpMetrics } from "./observability.js";
 import type { Repository } from "./storage/repository.js";
 
 export function createApp(repository: Repository) {
   const app = express();
+  const metrics = new HttpMetrics();
   app.disable("x-powered-by");
   app.set("trust proxy", config.trustProxy);
   app.use(
@@ -67,7 +70,14 @@ export function createApp(repository: Repository) {
       skip: (request) => request.path === "/healthz",
     }),
   );
-  app.get("/healthz", (_request, response) => response.json({ status: "ok", version: "1.0.0" }));
+  app.use((request, response, next) => {
+    const startedAt = performance.now();
+    response.on("finish", () => {
+      metrics.observe(request.method, response.statusCode, performance.now() - startedAt);
+    });
+    next();
+  });
+  app.get("/healthz", (_request, response) => response.json({ status: "ok", version: VERSION }));
   app.get("/readyz", async (_request, response) => {
     try {
       await repository.ping();
@@ -77,8 +87,13 @@ export function createApp(repository: Repository) {
     }
   });
   app.get("/version", (_request, response) =>
-    response.json({ name: "wp-chatgpt-publisher", version: "1.0.0", protocol: "mcp" }),
+    response.json({ name: "wp-chatgpt-publisher", version: VERSION, protocol: "mcp" }),
   );
+  if (config.metricsEnabled)
+    app.get("/metrics", (_request, response) => {
+      response.setHeader("Cache-Control", "no-store");
+      response.type("text/plain; version=0.0.4; charset=utf-8").send(metrics.render());
+    });
   app.use(createOAuthRouter(repository));
   app.use(
     "/ui",

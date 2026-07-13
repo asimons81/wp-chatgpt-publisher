@@ -4,7 +4,7 @@ Tags: chatgpt, editorial, publishing, mcp, rest-api
 Requires at least: 6.9
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 1.0.0
+Stable tag: 1.0.1
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -43,6 +43,9 @@ No. Publishing and scheduling are disabled in the recommended Editorial profile 
 The plugin stores connection metadata, keyed credential hashes, approved scopes, and a minimal audit trail. It does not store ChatGPT prompts, conversations, article bodies in the audit log, uploaded binaries in the audit log, authorization headers, or primary passwords.
 
 == Changelog ==
+
+= 1.0.1 =
+* Add opt-in low-cardinality HTTP metrics and complete structured tool-operation logging.
 
 = 1.0.0 =
 * Initial open-source release.

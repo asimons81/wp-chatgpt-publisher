@@ -49,7 +49,7 @@ Build the uploadable release ZIP:
 npm run package:wordpress
 ```
 
-Upload `artifacts/editorial-publisher-for-chatgpt-1.0.0.zip` through **Plugins > Add Plugin > Upload Plugin**, activate it, then open **Editorial Publisher > Diagnostics**. Production connections require HTTPS. Use an Editor for normal editorial work and grant Publisher only where scheduling/publishing is intended.
+Upload `artifacts/editorial-publisher-for-chatgpt-1.0.1.zip` through **Plugins > Add Plugin > Upload Plugin**, activate it, then open **Editorial Publisher > Diagnostics**. Production connections require HTTPS. Use an Editor for normal editorial work and grant Publisher only where scheduling/publishing is intended.
 
 ## Deploy the MCP service
 

@@ -7,6 +7,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   assertScopes,
   ScopeSchema,
+  VERSION,
   type Scope,
   type ToolContext,
 } from "@wp-chatgpt-publisher/contracts";
@@ -18,6 +19,8 @@ import {
 } from "@wp-chatgpt-publisher/tool-schemas";
 import { config } from "../config.js";
 import { AppError, toAppError } from "../errors.js";
+import { logger } from "../logger.js";
+import { hashIdentifier } from "../observability.js";
 import { hashToken, randomToken } from "../security/crypto.js";
 import type { Repository } from "../storage/repository.js";
 import { WordPressClient, stableHash } from "../wordpress/client.js";
@@ -34,7 +37,7 @@ export class McpService {
   readonly #wordpress = new WordPressClient();
   constructor(private readonly repository: Repository) {}
   createServer(context: ToolContext): McpServer {
-    const server = new McpServer({ name: "wp-chatgpt-publisher", version: "1.0.0" });
+    const server = new McpServer({ name: "wp-chatgpt-publisher", version: VERSION });
     this.#registerResources(server);
     for (const definition of DEFINITIONS) this.#registerTool(server, definition, context);
     return server;
@@ -68,7 +71,7 @@ export class McpService {
     }
   }
   #resourceHtml(title: string): string {
-    const asset = `${config.publicBaseUrl}/ui/assets/app.js?v=1.0.0`;
+    const asset = `${config.publicBaseUrl}/ui/assets/app.js?v=${VERSION}`;
     return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title.replace(/[<>&]/g, "")}</title></head><body><div id="root"></div><script type="module" src="${asset}"></script></body></html>`;
   }
   #registerTool(server: McpServer, definition: ToolDefinition, context: ToolContext): void {
@@ -100,6 +103,13 @@ export class McpService {
     rawInput: unknown,
     context: ToolContext,
   ) {
+    const startedAt = performance.now();
+    const logContext = {
+      requestId: context.requestId,
+      connectionId: hashIdentifier(context.connectionId),
+      toolName: name,
+      retryCount: 0,
+    };
     try {
       assertScopes(context.scopes, definition.requiredScopes);
       const input: unknown = definition.inputSchema.parse(rawInput) as unknown;
@@ -149,6 +159,15 @@ export class McpService {
       if (idempotencyKey)
         await this.repository.finishIdempotency(connection.id, idempotencyKey, output);
       await this.repository.touchConnection(connection.id);
+      logger.info(
+        {
+          ...logContext,
+          durationMs: Math.round(performance.now() - startedAt),
+          outcome: "success",
+          wordpressResponseCategory: "success",
+        },
+        "WordPress tool completed",
+      );
       return this.#result(output, definition.outputTemplate);
     } catch (error) {
       const appError =
@@ -160,6 +179,15 @@ export class McpService {
               "Edit the WordPress connection permissions, then reconnect in ChatGPT.",
             )
           : toAppError(error);
+      logger.warn(
+        {
+          ...logContext,
+          durationMs: Math.round(performance.now() - startedAt),
+          outcome: "error",
+          wordpressResponseCategory: appError.code,
+        },
+        "WordPress tool failed",
+      );
       return {
         isError: true,
         structuredContent: { error: appError.toSafeObject() },

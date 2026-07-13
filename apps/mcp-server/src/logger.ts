@@ -1,4 +1,5 @@
 import pino from "pino";
+import { VERSION } from "@wp-chatgpt-publisher/contracts";
 import { config } from "./config.js";
 
 const SECRET_KEYS = [
@@ -15,7 +16,7 @@ const SECRET_KEYS = [
 ];
 export const logger = pino({
   level: config.logLevel,
-  base: { service: "wp-chatgpt-publisher", version: "1.0.0" },
+  base: { service: "wp-chatgpt-publisher", version: VERSION },
   redact: {
     paths: SECRET_KEYS.flatMap((key) => [
       key,

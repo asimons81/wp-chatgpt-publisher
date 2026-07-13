@@ -2,6 +2,17 @@
 
 All notable changes follow Keep a Changelog and Semantic Versioning.
 
+## [1.0.1] - 2026-07-13
+
+### Added
+
+- Added an opt-in Prometheus-compatible `/metrics` endpoint with bounded method and status-class labels.
+
+### Fixed
+
+- Completed structured tool-operation logs with hashed connection identifiers, tool names, durations, outcomes, WordPress response categories, and retry counts.
+- Centralized the service version used by MCP, health, version, logging, and Apps SDK resource URLs.
+
 ## [1.0.0] - 2026-07-12
 
 ### Added
@@ -23,4 +34,5 @@ All notable changes follow Keep a Changelog and Semantic Versioning.
 - Added idempotent in-place schema upgrades that preserve existing data.
 - Deactivation removes scheduled cleanup but preserves data; uninstall preserves by default and supports explicit full removal.
 
+[1.0.1]: https://github.com/asimons81/wp-chatgpt-publisher/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/asimons81/wp-chatgpt-publisher/releases/tag/v1.0.0

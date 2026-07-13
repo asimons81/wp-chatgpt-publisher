@@ -3,7 +3,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { ZipArchive } from "archiver";
 
 await mkdir("artifacts", { recursive: true });
-const target = "artifacts/editorial-publisher-for-chatgpt-1.0.0.zip";
+const target = "artifacts/editorial-publisher-for-chatgpt-1.0.1.zip";
 await rm(target, { force: true });
 const output = createWriteStream(target);
 const archive = new ZipArchive({ zlib: { level: 9 } });

@@ -48,6 +48,6 @@ jobs:
         with:
           {
             name: wordpress-plugin,
-            path: artifacts/editorial-publisher-for-chatgpt-1.0.0.zip,
+            path: artifacts/editorial-publisher-for-chatgpt-1.0.1.zip,
             if-no-files-found: error,
           }
