@@ -9,7 +9,7 @@ jobs:
   node:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
       - run: npm ci
@@ -25,7 +25,7 @@ jobs:
       fail-fast: false
       matrix: { php: ["8.1", "8.2", "8.3", "8.4"] }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: shivammathur/setup-php@v2
         with: { php-version: "${{ matrix.php }}", coverage: none, tools: composer:v2 }
       - run: composer install --no-interaction --prefer-dist
@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [node, php]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with: { node-version: 24, cache: npm }
       - run: npm ci
