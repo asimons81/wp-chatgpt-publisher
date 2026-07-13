@@ -114,7 +114,7 @@ Multisite, WordPress.com hosted plans, headless sites, disabled REST APIs, produ
 
 ## Release status
 
-All local implementation, packaging, security, full-stack, lifecycle, and browser gates pass. Account-gated actions are tracked in [project status](docs/status.md) and the [release checklist](docs/release-checklist.md); a public release must not be claimed before production PostgreSQL, ChatGPT developer-mode acceptance, and owner-authorized publication are evidenced.
+All local implementation, packaging, security, full-stack, lifecycle, and browser gates pass. The public Vercel service is live and ready on durable PostgreSQL. ChatGPT developer-mode acceptance and directory submissions remain account-gated and are tracked in [project status](docs/status.md) and the [release checklist](docs/release-checklist.md).
 
 ## License
 

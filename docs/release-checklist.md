@@ -31,6 +31,6 @@ This checklist is evidence-based. Automated/local verification is distinct from 
 - [x] Version is 1.0.0 in product metadata and the changelog is current.
 - [x] ZIP, checksums, SBOM, source archive, and release notes have been regenerated after the final gate run.
 - [x] ChatGPT listing copy, reviewer workflow, privacy/terms templates, screenshots, and demo script are prepared.
-- [ ] A durable production PostgreSQL database is connected and `/readyz` passes on public HTTPS.
+- [x] A durable production PostgreSQL database is connected and `/readyz` passes on public HTTPS.
 - [ ] Manual ChatGPT developer-mode desktop/mobile acceptance is recorded.
 - [ ] Repository push, tag, GitHub Release, registries, WordPress.org, and OpenAI submission are explicitly authorized and evidenced.

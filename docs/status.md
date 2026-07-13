@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Milestone 6 - release candidate verification and account-gated handoff.
+Milestone 11 - v1.0 release publication and account-gated directory acceptance.
 
 ## Completed work
 
@@ -11,7 +11,7 @@ Milestone 6 - release candidate verification and account-gated handoff.
 - OAuth 2.1 MCP service with PKCE, dynamic client registration, audience/resource binding, rotating refresh tokens, encrypted credentials, static tools, confirmations, and Apps SDK resources.
 - Responsive ChatGPT cards and WordPress admin surfaces with desktop/mobile browser QA.
 - Fresh ZIP installation, official Plugin Check, Docker image/readiness, real OAuth/MCP/WordPress integration, complete editorial E2E, and lifecycle verification.
-- Vercel Node function configuration and a successful production build at `editorial-publisher-for-chatgpt.vercel.app`.
+- Vercel Node function and a no-cost Neon PostgreSQL resource deployed at `editorial-publisher-for-chatgpt.vercel.app`.
 
 ## Latest verified test evidence
 
@@ -24,17 +24,18 @@ Milestone 6 - release candidate verification and account-gated handoff.
 - Lifecycle: schema upgrade preserves data; deactivation preserves tables and removes cron; default uninstall preserves data; opt-in uninstall removes plugin tables.
 - Production dependency audit: zero known vulnerabilities.
 - Official WordPress Plugin Check: no errors.
+- Public production verification: health, readiness, version, OAuth metadata, dynamic client registration, authorization persistence, Apps SDK asset delivery, and the MCP OAuth challenge pass over HTTPS.
 
 ## Deployment state
 
-- Vercel project and production alias exist; the source-matched production build/deploy ID `dpl_6Rbbrk5dcobXM7dA2Bdatb4ebvLq` is READY.
-- Runtime requests intentionally fail closed because no durable production `DATABASE_URL` is connected.
+- Vercel production build/deploy `dpl_EmEngVt8DuaN5KGM3YS6riQjVSjS` is READY at the stable alias.
+- Neon resource `editorial-publisher-production` is Available on the explicit `free_v3` billing plan and provides encrypted production-only PostgreSQL variables.
+- `/healthz`, `/readyz`, `/version`, both OAuth metadata documents, the Apps SDK UI asset, and the MCP 401 challenge return the expected public responses.
 - Encryption/signing keys, exact ChatGPT origin, telemetry-off, and the public base URL are configured in Vercel without committing their values.
 
 ## External actions still required
 
-1. The owner must accept the selected PostgreSQL provider's marketplace/legal terms (or supply an existing managed PostgreSQL URL), connect it as `DATABASE_URL`, and redeploy.
-2. After readiness is green, the owner must complete ChatGPT developer-mode desktop/mobile acceptance in their account.
-3. GitHub repository creation/push, public release publication, WordPress.org submission, and OpenAI app submission require owner identity, legal confirmations, and final approval.
+1. The owner must complete ChatGPT developer-mode desktop/mobile acceptance against a compatible public WordPress test site.
+2. WordPress.org and OpenAI app submissions still require the owner's final public privacy, terms, support, reviewer-account, and portal confirmations.
 
-No code or local test blocker remains. Public release status must not be claimed until the three account-gated steps above are evidenced.
+No code, packaging, database, or deployment blocker remains. OpenAI listing or WordPress.org acceptance must not be claimed until the account-gated steps above are evidenced.
