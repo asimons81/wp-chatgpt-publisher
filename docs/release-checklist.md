@@ -32,5 +32,6 @@ This checklist is evidence-based. Automated/local verification is distinct from 
 - [x] ZIP, checksums, SBOM, source archive, and release notes have been regenerated after the final gate run.
 - [x] ChatGPT listing copy, reviewer workflow, privacy/terms templates, screenshots, and demo script are prepared.
 - [x] A durable production PostgreSQL database is connected and `/readyz` passes on public HTTPS.
+- [x] Public repository, signed `v1.0.0` tag, GitHub Release, and downloadable release assets are published and evidenced.
 - [ ] Manual ChatGPT developer-mode desktop/mobile acceptance is recorded.
-- [ ] Repository push, tag, GitHub Release, registries, WordPress.org, and OpenAI submission are explicitly authorized and evidenced.
+- [ ] WordPress.org and OpenAI directory submissions are explicitly authorized and evidenced.

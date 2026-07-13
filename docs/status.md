@@ -25,6 +25,7 @@ Milestone 11 - v1.0 release publication and account-gated directory acceptance.
 - Production dependency audit: zero known vulnerabilities.
 - Official WordPress Plugin Check: no errors.
 - Public production verification: health, readiness, version, OAuth metadata, dynamic client registration, authorization persistence, Apps SDK asset delivery, and the MCP OAuth challenge pass over HTTPS.
+- GitHub Actions at tagged commit `43279d2`: CI, security, minimum/latest WordPress integration, and release artifact workflows pass.
 
 ## Deployment state
 
@@ -32,6 +33,7 @@ Milestone 11 - v1.0 release publication and account-gated directory acceptance.
 - Neon resource `editorial-publisher-production` is Available on the explicit `free_v3` billing plan and provides encrypted production-only PostgreSQL variables.
 - `/healthz`, `/readyz`, `/version`, both OAuth metadata documents, the Apps SDK UI asset, and the MCP 401 challenge return the expected public responses.
 - Encryption/signing keys, exact ChatGPT origin, telemetry-off, and the public base URL are configured in Vercel without committing their values.
+- Public source repository and verified `v1.0.0` release assets are available at `github.com/asimons81/wp-chatgpt-publisher`.
 
 ## External actions still required
 
