@@ -15,4 +15,4 @@ The release includes:
 
 Known v1 exclusions include Multisite, WordPress.com hosted plans, headless sites, disabled REST API environments, AIOSEO writes, permanent deletion, broad site administration, code/filesystem/database execution, autonomous generation/publishing, and built-in OpenAI API calls.
 
-The production MCP endpoint is deployed with durable PostgreSQL and passes public readiness, OAuth, persistence, UI-asset, and authentication-challenge checks. ChatGPT developer-mode acceptance plus the final WordPress.org/OpenAI privacy, terms, support, reviewer-account, and portal confirmations remain account-gated.
+The production MCP endpoint is deployed with durable PostgreSQL and passes public readiness, OAuth, persistence, UI-asset, and authentication-challenge checks. ChatGPT desktop developer-mode OAuth, read, draft, and non-executing publish-review acceptance passes. Mobile-client acceptance plus the final WordPress.org/OpenAI privacy, terms, support, reviewer-account, and portal confirmations remain account-gated.

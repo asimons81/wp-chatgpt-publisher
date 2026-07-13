@@ -26,6 +26,7 @@ Milestone 11 - v1.0 release publication and account-gated directory acceptance.
 - Official WordPress Plugin Check: no errors.
 - Public production verification: health, readiness, version, OAuth metadata, dynamic client registration, authorization persistence, Apps SDK asset delivery, and the MCP OAuth challenge pass over HTTPS.
 - GitHub Actions at tagged commit `43279d2`: CI, security, minimum/latest WordPress integration, and release artifact workflows pass.
+- ChatGPT Plus web developer mode: production OAuth, connected-site/content reads, safe draft creation, and the non-executing publish review pass against a disposable HTTPS WordPress site.
 
 ## Deployment state
 
@@ -37,7 +38,7 @@ Milestone 11 - v1.0 release publication and account-gated directory acceptance.
 
 ## External actions still required
 
-1. The owner must complete ChatGPT developer-mode desktop/mobile acceptance against a compatible public WordPress test site.
+1. The owner must complete the remaining ChatGPT mobile-client acceptance pass; desktop developer-mode acceptance is recorded.
 2. WordPress.org and OpenAI app submissions still require the owner's final public privacy, terms, support, reviewer-account, and portal confirmations.
 
 No code, packaging, database, or deployment blocker remains. OpenAI listing or WordPress.org acceptance must not be claimed until the account-gated steps above are evidenced.
