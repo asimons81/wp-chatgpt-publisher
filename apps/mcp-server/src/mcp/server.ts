@@ -137,14 +137,6 @@ export class McpService {
           input as Record<string, unknown>,
           context,
         );
-      const wordpressInput =
-        name === "wordpress_upload_media"
-          ? await this.#normalizeUploadInput(
-              connection,
-              input as Record<string, unknown>,
-              context.requestId,
-            )
-          : input;
       const idempotencyKey =
         typeof (input as Record<string, unknown>).idempotencyKey === "string"
           ? (input as Record<string, string>).idempotencyKey
@@ -156,13 +148,21 @@ export class McpService {
           name,
           stableHash(
             name === "wordpress_upload_media"
-              ? uploadIdempotencyInput(wordpressInput as Record<string, unknown>)
+              ? uploadIdempotencyInput(input as Record<string, unknown>)
               : input,
           ),
         );
         if (!claim.claimed) return this.#result(claim.response, definition.outputTemplate);
         claimedIdempotency = { connectionId: connection.id, key: idempotencyKey };
       }
+      const wordpressInput =
+        name === "wordpress_upload_media"
+          ? await this.#normalizeUploadInput(
+              connection,
+              input as Record<string, unknown>,
+              context.requestId,
+            )
+          : input;
       const output = await this.#wordpress.call(
         connection,
         name,

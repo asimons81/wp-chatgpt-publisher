@@ -23,21 +23,14 @@ export function stableHash(value: unknown): string {
 export function uploadIdempotencyInput(input: Record<string, unknown>): Record<string, unknown> {
   const file = input.file;
   if (!file || typeof file !== "object") return input;
-  const resolved = file as Partial<ResolvedConnectorUpload>;
-  if (
-    !(resolved.bytes instanceof Uint8Array) ||
-    typeof resolved.fileName !== "string" ||
-    typeof resolved.mimeType !== "string" ||
-    typeof resolved.sha256 !== "string"
-  ) {
-    return input;
-  }
+  const connector = file as Record<string, unknown>;
+  if (typeof connector.file_id !== "string") return input;
   return {
     ...input,
     file: {
-      fileName: resolved.fileName,
-      mimeType: resolved.mimeType,
-      sha256: resolved.sha256,
+      fileId: connector.file_id,
+      fileName: connector.file_name ?? null,
+      mimeType: connector.mime_type ?? null,
     },
   };
 }
