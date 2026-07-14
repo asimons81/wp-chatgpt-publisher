@@ -31,23 +31,19 @@ Exact JSON schemas are defined once in `packages/contracts` and referenced by `p
 
 ## Uploading a ChatGPT-generated image
 
-`wordpress_upload_media` declares `file` in `_meta["openai/fileParams"]`. ChatGPT therefore supplies one top-level connector file object; a path string or a `{ "file_id": ... }` partial object is not valid. For an image generated at `/mnt/data/example.png`, the tool-call payload received by the MCP service is:
+`wordpress_upload_media` declares `file` in `_meta["openai/fileParams"]`. In a ChatGPT tool call, pass the generated image's connector-authorized absolute runtime path as the top-level `file` string:
 
 ```json
 {
-  "file": {
-    "download_url": "/mnt/data/example.png",
-    "file_id": "file_<runtime-provided-id>",
-    "mime_type": "image/png",
-    "file_name": "example.png"
-  },
+  "file": "/mnt/data/example.png",
+  "fileName": "example.png",
   "title": "Example image",
   "altText": "Describe the image for screen-reader users",
   "idempotencyKey": "<new-uuid>"
 }
 ```
 
-`download_url` and `file_id` are required; ChatGPT normally fills the complete object when it binds the generated file to the declared `file` parameter. The temporary locator may be an approved HTTPS connector download or a runtime-mounted path. Mounted paths are realpath-checked against `CONNECTOR_UPLOAD_DIRS` (default `/mnt/data`), and the service rejects missing files, symlink escapes, unsafe names, oversized files, MIME/content mismatches, and non-image formats before forwarding a digest-bound multipart upload to WordPress.
+The ChatGPT connector file bridge rewrites that string into the canonical internal connector object containing `download_url`, `file_id`, and optional MIME/name metadata before the MCP validator runs. Callers must not construct that internal object themselves. The temporary locator may resolve to an approved HTTPS connector download or a runtime-mounted path. Mounted paths are realpath-checked against `CONNECTOR_UPLOAD_DIRS` (default `/mnt/data`), and the service rejects missing files, symlink escapes, unsafe names, oversized files, MIME/content mismatches, and non-image formats before forwarding a digest-bound multipart upload to WordPress. Idempotent retries fingerprint the verified content digest, MIME type, safe filename, and user fields rather than the connector's temporary download URL.
 
 For a public remote image, omit `file` and use the separate HTTPS-only form:
 

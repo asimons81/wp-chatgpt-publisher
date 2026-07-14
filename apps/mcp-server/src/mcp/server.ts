@@ -25,7 +25,7 @@ import { hashIdentifier } from "../observability.js";
 import { hashToken, randomToken } from "../security/crypto.js";
 import type { Repository } from "../storage/repository.js";
 import { WordPressClient } from "../wordpress/client.js";
-import { stableHash } from "../wordpress/payload.js";
+import { stableHash, uploadIdempotencyInput } from "../wordpress/payload.js";
 import { resolveConnectorFile } from "../media/connector-files.js";
 
 const CONSEQUENTIAL_SCOPES: Record<string, Scope> = {
@@ -137,6 +137,14 @@ export class McpService {
           input as Record<string, unknown>,
           context,
         );
+      const wordpressInput =
+        name === "wordpress_upload_media"
+          ? await this.#normalizeUploadInput(
+              connection,
+              input as Record<string, unknown>,
+              context.requestId,
+            )
+          : input;
       const idempotencyKey =
         typeof (input as Record<string, unknown>).idempotencyKey === "string"
           ? (input as Record<string, string>).idempotencyKey
@@ -146,19 +154,15 @@ export class McpService {
           connection.id,
           idempotencyKey,
           name,
-          stableHash(input),
+          stableHash(
+            name === "wordpress_upload_media"
+              ? uploadIdempotencyInput(wordpressInput as Record<string, unknown>)
+              : input,
+          ),
         );
         if (!claim.claimed) return this.#result(claim.response, definition.outputTemplate);
         claimedIdempotency = { connectionId: connection.id, key: idempotencyKey };
       }
-      const wordpressInput =
-        name === "wordpress_upload_media"
-          ? await this.#normalizeUploadInput(
-              connection,
-              input as Record<string, unknown>,
-              context.requestId,
-            )
-          : input;
       const output = await this.#wordpress.call(
         connection,
         name,

@@ -20,6 +20,28 @@ export function stableHash(value: unknown): string {
   return createHash("sha256").update(stableJson(value)).digest("base64url");
 }
 
+export function uploadIdempotencyInput(input: Record<string, unknown>): Record<string, unknown> {
+  const file = input.file;
+  if (!file || typeof file !== "object") return input;
+  const resolved = file as Partial<ResolvedConnectorUpload>;
+  if (
+    !(resolved.bytes instanceof Uint8Array) ||
+    typeof resolved.fileName !== "string" ||
+    typeof resolved.mimeType !== "string" ||
+    typeof resolved.sha256 !== "string"
+  ) {
+    return input;
+  }
+  return {
+    ...input,
+    file: {
+      fileName: resolved.fileName,
+      mimeType: resolved.mimeType,
+      sha256: resolved.sha256,
+    },
+  };
+}
+
 function stableJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value && typeof value === "object") {
