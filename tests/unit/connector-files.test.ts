@@ -6,7 +6,11 @@ import {
   resolveConnectorFile,
   type ResolvedConnectorUpload,
 } from "../../apps/mcp-server/src/media/connector-files.js";
-import { stableHash, uploadForm } from "../../apps/mcp-server/src/wordpress/payload.js";
+import {
+  stableHash,
+  uploadForm,
+  uploadIdempotencyInput,
+} from "../../apps/mcp-server/src/wordpress/payload.js";
 
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
@@ -151,5 +155,33 @@ describe("WordPress multipart normalization", () => {
     const second = stableHash({ file: { file_id: "file_2", download_url: "/mnt/data/two.png" } });
     expect(first).toBe(reordered);
     expect(first).not.toBe(second);
+  });
+
+  it("uses verified file content instead of temporary connector references for idempotency", () => {
+    const common = {
+      idempotencyKey: crypto.randomUUID(),
+      altText: "Example",
+    };
+    const resolved = {
+      bytes: new Uint8Array(PNG),
+      fileName: "example.png",
+      mimeType: "image/png" as const,
+      sha256: "a".repeat(64),
+    };
+    const first = stableHash(uploadIdempotencyInput({ ...common, file: resolved }));
+    const retried = stableHash(
+      uploadIdempotencyInput({
+        ...common,
+        file: { ...resolved, bytes: new Uint8Array(PNG) },
+      }),
+    );
+    const changed = stableHash(
+      uploadIdempotencyInput({
+        ...common,
+        file: { ...resolved, sha256: "b".repeat(64) },
+      }),
+    );
+    expect(retried).toBe(first);
+    expect(changed).not.toBe(first);
   });
 });
