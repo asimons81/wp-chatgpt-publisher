@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalWordPressSiteUrl } from "../../apps/mcp-server/src/auth/oauth.js";
+import { canonicalWordPressSiteUrl } from "../../apps/mcp-server/src/auth/wordpress-site.js";
 
 describe("WordPress canonical site discovery", () => {
   it("uses the REST API link to adopt WordPress's configured www host", () => {

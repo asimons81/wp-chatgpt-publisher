@@ -15,6 +15,8 @@ import {
   verifyConnectionRequest,
   verifyPkce,
 } from "./tokens.js";
+import { isAcceptedOAuthResource } from "./oauth-policy.js";
+import { canonicalWordPressSiteUrl } from "./wordpress-site.js";
 
 const REDIRECT_HOSTS = new Set(["chatgpt.com", "platform.openai.com", "localhost", "127.0.0.1"]);
 const htmlEscape = (value: string) =>
@@ -55,24 +57,6 @@ function redirectWith(base: string, values: Record<string, string>): string {
   const url = new URL(base);
   for (const [key, value] of Object.entries(values)) url.searchParams.set(key, value);
   return url.toString();
-}
-
-export function canonicalWordPressSiteUrl(siteUrl: string, linkHeader: string | null): string {
-  const restRoot = linkHeader?.match(
-    /<([^>]+)>\s*;\s*rel=(?:"https:\/\/api\.w\.org\/"|https:\/\/api\.w\.org\/)/i,
-  )?.[1];
-  if (!restRoot) return siteUrl;
-  try {
-    const canonical = new URL(restRoot);
-    const suffix = "wp-json/";
-    if (!canonical.pathname.endsWith(suffix)) return siteUrl;
-    canonical.pathname = canonical.pathname.slice(0, -suffix.length);
-    canonical.search = "";
-    canonical.hash = "";
-    return canonical.toString().replace(/\/$/, "");
-  } catch {
-    return siteUrl;
-  }
 }
 
 export function createOAuthRouter(repository: Repository): Router {
@@ -187,7 +171,7 @@ export function createOAuthRouter(repository: Repository): Router {
           "The authorization request is incomplete or unsupported.",
           400,
         );
-      if (!config.oauthResourceUrls.includes(resource))
+      if (!isAcceptedOAuthResource(resource))
         throw new AppError(
           "security_rejection",
           "The OAuth resource does not match this server.",

@@ -112,7 +112,7 @@ export class McpService {
     };
     try {
       assertScopes(context.scopes, definition.requiredScopes);
-      const input: unknown = definition.inputSchema.parse(rawInput) as unknown;
+      const input: unknown = definition.inputSchema.parse(rawInput);
       const connection = await this.repository.getConnection(context.connectionId);
       if (!connection || connection.revokedAt)
         throw new AppError(

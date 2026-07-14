@@ -11,6 +11,7 @@ import { VERSION } from "@wp-chatgpt-publisher/contracts";
 import { config } from "./config.js";
 import { AppError, toAppError } from "./errors.js";
 import { createOAuthRouter } from "./auth/oauth.js";
+import { OAUTH_FORM_ACTION } from "./auth/oauth-policy.js";
 import { challengeHeader, requireAccessToken } from "./auth/middleware.js";
 import {
   errorLogSerializer,
@@ -51,7 +52,7 @@ export function createApp(repository: Repository) {
           frameAncestors: ["'none'"],
           // The OAuth form posts locally, then intentionally redirects to the
           // HTTPS WordPress site that passed discovery and SSRF validation.
-          formAction: ["'self'", "https:"],
+          formAction: [...OAUTH_FORM_ACTION],
           styleSrc: ["'self'", "'unsafe-inline'"],
           scriptSrc: ["'self'"],
         },
