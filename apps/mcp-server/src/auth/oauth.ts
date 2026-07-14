@@ -15,6 +15,8 @@ import {
   verifyConnectionRequest,
   verifyPkce,
 } from "./tokens.js";
+import { isAcceptedOAuthResource } from "./oauth-policy.js";
+import { canonicalWordPressSiteUrl } from "./wordpress-site.js";
 
 const REDIRECT_HOSTS = new Set(["chatgpt.com", "platform.openai.com", "localhost", "127.0.0.1"]);
 const htmlEscape = (value: string) =>
@@ -169,7 +171,7 @@ export function createOAuthRouter(repository: Repository): Router {
           "The authorization request is incomplete or unsupported.",
           400,
         );
-      if (resource !== config.publicBaseUrl)
+      if (!isAcceptedOAuthResource(resource))
         throw new AppError(
           "security_rejection",
           "The OAuth resource does not match this server.",
@@ -225,9 +227,9 @@ export function createOAuthRouter(repository: Repository): Router {
             400,
             "Start the connection again in ChatGPT.",
           );
-        const target = await validateExternalUrl(body.site_url, "site");
-        const siteUrl = target.url.toString().replace(/\/$/, "");
-        const discovery = await fetch(`${siteUrl}/wp-json/wp-chatgpt-publisher/v1/discovery`, {
+        let target = await validateExternalUrl(body.site_url, "site");
+        let siteUrl = target.url.toString().replace(/\/$/, "");
+        let discovery = await fetch(`${siteUrl}/wp-json/wp-chatgpt-publisher/v1/discovery`, {
           dispatcher: target.dispatcher,
           redirect: "error",
           signal: AbortSignal.timeout(config.wordpressRequestTimeoutMs),
@@ -239,6 +241,23 @@ export function createOAuthRouter(repository: Repository): Router {
             400,
             "Install and activate the WordPress plugin, confirm HTTPS, then retry.",
           );
+        const canonicalSiteUrl = canonicalWordPressSiteUrl(siteUrl, discovery.headers.get("link"));
+        if (canonicalSiteUrl !== siteUrl) {
+          target = await validateExternalUrl(canonicalSiteUrl, "site");
+          discovery = await fetch(`${canonicalSiteUrl}/wp-json/wp-chatgpt-publisher/v1/discovery`, {
+            dispatcher: target.dispatcher,
+            redirect: "error",
+            signal: AbortSignal.timeout(config.wordpressRequestTimeoutMs),
+          });
+          if (!discovery.ok)
+            throw new AppError(
+              "unsupported",
+              "Editorial Publisher for ChatGPT was not discovered at the canonical WordPress URL.",
+              400,
+              "Confirm the WordPress Address and Site Address settings, then retry.",
+            );
+          siteUrl = canonicalSiteUrl;
+        }
         await repository.setFlowSite(flow.id, siteUrl);
         const requestToken = await issueConnectionRequest(flow.id, siteUrl, flow.scopes);
         const approval = new URL(`${siteUrl}/wp-admin/admin.php`);

@@ -41,26 +41,29 @@ describe("signed WordPress connection requests", () => {
     });
   });
 
-  it("issues audience-bound access tokens with validated scopes", async () => {
-    const connectionId = randomUUID();
-    const token = await issueAccessToken({
-      subject: "wordpress-user-7",
-      clientId: "chatgpt-test-client",
-      connectionId,
-      scopes: ["site:read", "content:read"],
-      audience: "http://127.0.0.1:8787",
-    });
-    await expect(verifyAccessToken(token)).resolves.toMatchObject({
-      subject: "wordpress-user-7",
-      clientId: "chatgpt-test-client",
-      connectionId,
-      scopes: ["site:read", "content:read"],
-      audience: "http://127.0.0.1:8787",
-    });
-    await expect(verifyAccessToken(token, "https://wrong.example")).rejects.toMatchObject({
-      code: "authentication_required",
-    });
-  });
+  it.each(["http://127.0.0.1:8787", "http://127.0.0.1:8787/mcp"])(
+    "issues access tokens bound to the accepted audience %s",
+    async (audience) => {
+      const connectionId = randomUUID();
+      const token = await issueAccessToken({
+        subject: "wordpress-user-7",
+        clientId: "chatgpt-test-client",
+        connectionId,
+        scopes: ["site:read", "content:read"],
+        audience,
+      });
+      await expect(verifyAccessToken(token)).resolves.toMatchObject({
+        subject: "wordpress-user-7",
+        clientId: "chatgpt-test-client",
+        connectionId,
+        scopes: ["site:read", "content:read"],
+        audience,
+      });
+      await expect(verifyAccessToken(token, "https://wrong.example")).rejects.toMatchObject({
+        code: "authentication_required",
+      });
+    },
+  );
 
   it("validates S256 PKCE without accepting another verifier", () => {
     const verifier = "A".repeat(64);
