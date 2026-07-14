@@ -63,6 +63,16 @@ The service requires PostgreSQL and two independent 32-byte secrets. Supported p
 
 See [self-hosting](docs/self-hosting.md) for environment variables, PostgreSQL, Vercel, backups, rotation, scaling, upgrades, and rollback. No proprietary relay is mandatory.
 
+### Update a source checkout
+
+From a clean Git checkout on a branch with a configured upstream, check for an update without changing files:
+
+```sh
+npm run update -- --check
+```
+
+Run `npm run update` to review and confirm the exact fast-forward, or use `npm run update -- --yes` in non-interactive automation. The updater refuses dirty, detached, locally ahead, and diverged checkouts. After the fast-forward it installs the exact lockfile dependencies without lifecycle scripts and rebuilds the project. It does not deploy or restart the service, migrate infrastructure, modify secrets or databases, or replace the separately installed WordPress plugin; follow the deployment-specific upgrade and rollback steps in [self-hosting](docs/self-hosting.md).
+
 ## Connect from ChatGPT
 
 Deploy the service on public HTTPS, then follow [ChatGPT setup](docs/chatgpt-setup.md). The OAuth flow redirects to the user's own WordPress login and approval screen; the normal WordPress password never passes through the MCP service or ChatGPT.

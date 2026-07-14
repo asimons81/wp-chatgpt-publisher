@@ -41,6 +41,7 @@
     "release:reproducible": "node scripts/check-reproducible-builds.mjs",
     "release:check": "node scripts/release-check.mjs",
     "sbom": "cyclonedx-npm --output-file artifacts/sbom.cdx.json --omit dev",
+    "update": "node scripts/update.mjs",
     "clean": "node scripts/clean.mjs"
   },
   "devDependencies": {
