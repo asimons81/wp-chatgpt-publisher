@@ -23,16 +23,9 @@ export function stableHash(value: unknown): string {
 export function uploadIdempotencyInput(input: Record<string, unknown>): Record<string, unknown> {
   const file = input.file;
   if (!file || typeof file !== "object") return input;
-  const connector = file as Record<string, unknown>;
-  if (typeof connector.file_id !== "string") return input;
-  return {
-    ...input,
-    file: {
-      fileId: connector.file_id,
-      fileName: connector.file_name ?? null,
-      mimeType: connector.mime_type ?? null,
-    },
-  };
+  const callerFields = { ...input };
+  delete callerFields.file;
+  return callerFields;
 }
 
 function stableJson(value: unknown): string {
