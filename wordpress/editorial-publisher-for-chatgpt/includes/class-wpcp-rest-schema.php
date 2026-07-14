@@ -301,15 +301,18 @@ final class WPCP_REST_Schema {
 			'upload_media' => array(
 				'sourceUrl'      => array(
 					'type'      => 'string',
-					'required'  => true,
 					'format'    => 'uri',
 					'maxLength' => 4096,
 				),
 				'fileName'       => array(
 					'type'      => 'string',
-					'required'  => true,
 					'minLength' => 1,
 					'maxLength' => 240,
+				),
+				'fileSha256'     => array(
+					'type'      => 'string',
+					'pattern'   => '^[a-f0-9]{64}$',
+					'maxLength' => 64,
 				),
 				'title'          => array(
 					'type'      => 'string',

@@ -10,6 +10,7 @@ import {
   VERSION,
   type Scope,
   type ToolContext,
+  type ConnectorFileInput,
 } from "@wp-chatgpt-publisher/contracts";
 import {
   TOOL_DEFINITIONS,
@@ -23,7 +24,9 @@ import { logger } from "../logger.js";
 import { hashIdentifier } from "../observability.js";
 import { hashToken, randomToken } from "../security/crypto.js";
 import type { Repository } from "../storage/repository.js";
-import { WordPressClient, stableHash } from "../wordpress/client.js";
+import { WordPressClient } from "../wordpress/client.js";
+import { stableHash } from "../wordpress/payload.js";
+import { resolveConnectorFile } from "../media/connector-files.js";
 
 const CONSEQUENTIAL_SCOPES: Record<string, Scope> = {
   publish: "publish:execute",
@@ -110,6 +113,7 @@ export class McpService {
       toolName: name,
       retryCount: 0,
     };
+    let claimedIdempotency: { connectionId: string; key: string } | null = null;
     try {
       assertScopes(context.scopes, definition.requiredScopes);
       const input: unknown = definition.inputSchema.parse(rawInput);
@@ -145,10 +149,15 @@ export class McpService {
           stableHash(input),
         );
         if (!claim.claimed) return this.#result(claim.response, definition.outputTemplate);
+        claimedIdempotency = { connectionId: connection.id, key: idempotencyKey };
       }
       const wordpressInput =
         name === "wordpress_upload_media"
-          ? this.#normalizeUploadInput(input as Record<string, unknown>)
+          ? await this.#normalizeUploadInput(
+              connection,
+              input as Record<string, unknown>,
+              context.requestId,
+            )
           : input;
       const output = await this.#wordpress.call(
         connection,
@@ -158,6 +167,7 @@ export class McpService {
       );
       if (idempotencyKey)
         await this.repository.finishIdempotency(connection.id, idempotencyKey, output);
+      claimedIdempotency = null;
       await this.repository.touchConnection(connection.id);
       logger.info(
         {
@@ -170,6 +180,11 @@ export class McpService {
       );
       return this.#result(output, definition.outputTemplate);
     } catch (error) {
+      if (claimedIdempotency) {
+        await this.repository
+          .releaseIdempotency(claimedIdempotency.connectionId, claimedIdempotency.key)
+          .catch(() => undefined);
+      }
       const appError =
         error instanceof Error && error.message.startsWith("Missing required scope")
           ? new AppError(
@@ -323,16 +338,28 @@ export class McpService {
     if (preview.status === "publish" && currentMediaId > 0 && currentMediaId !== nextMediaId)
       await this.#verifyConfirmation("wordpress_set_featured_image", input, context);
   }
-  #normalizeUploadInput(input: Record<string, unknown>): Record<string, unknown> {
+  async #normalizeUploadInput(
+    connection: NonNullable<Awaited<ReturnType<Repository["getConnection"]>>>,
+    input: Record<string, unknown>,
+    requestId: string,
+  ): Promise<Record<string, unknown>> {
     const file =
       typeof input.file === "object" && input.file ? (input.file as Record<string, unknown>) : null;
     if (!file) return input;
-    const rest = { ...input };
-    delete rest.file;
+    const site = (await this.#wordpress.call(
+      connection,
+      "wordpress_get_site",
+      {},
+      requestId,
+    )) as Record<string, unknown>;
+    const maximumBytes = Number(site.maximumUploadBytes);
+    const resolved = await resolveConnectorFile(file as ConnectorFileInput, {
+      approvedRoots: config.connectorUploadDirs,
+      maximumBytes,
+    });
     return {
-      ...rest,
-      sourceUrl: file.download_url,
-      fileName: input.fileName ?? file.file_name,
+      ...input,
+      file: resolved,
     };
   }
   #result(output: unknown, template?: string) {

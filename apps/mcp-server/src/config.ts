@@ -26,6 +26,7 @@ const ConfigSchema = z
       .min(65_536)
       .max(10_485_760)
       .default(2_097_152),
+    CONNECTOR_UPLOAD_DIRS: z.string().default("/mnt/data"),
   })
   .superRefine((value, ctx) => {
     if (value.NODE_ENV === "production") {
@@ -87,4 +88,7 @@ export const config = {
   confirmationTtlSeconds: parsed.CONFIRMATION_TTL_SECONDS,
   wordpressRequestTimeoutMs: parsed.WORDPRESS_REQUEST_TIMEOUT_MS,
   wordpressMaxResponseBytes: parsed.WORDPRESS_MAX_RESPONSE_BYTES,
+  connectorUploadDirs: parsed.CONNECTOR_UPLOAD_DIRS.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
 } as const;

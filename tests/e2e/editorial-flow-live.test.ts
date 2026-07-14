@@ -118,15 +118,44 @@ live("complete real WordPress editorial workflow over OAuth and MCP", () => {
     expect(created.status).toBe("draft");
     expect(created.auditEventId).toBeTruthy();
 
-    const uploaded = await call(editorialClient, "wordpress_upload_media", {
+    const connectorUploadInput = {
+      file: {
+        download_url: "/mnt/data/editorial-publisher-icon-512.png",
+        file_id: `file_e2e_${run}`,
+        mime_type: "image/png",
+        file_name: `connector-mounted-e2e-${run}.png`,
+      },
+      title: "Mounted connector acceptance image",
+      altText: "Editorial Publisher connected-site card",
+      idempotencyKey: randomUUID(),
+    };
+    const connectorUploaded = await call(
+      editorialClient,
+      "wordpress_upload_media",
+      connectorUploadInput,
+    );
+    const connectorRetry = await call(
+      editorialClient,
+      "wordpress_upload_media",
+      connectorUploadInput,
+    );
+    const mediaId = Number(object(connectorUploaded.object).id);
+    expect(mediaId).toBeGreaterThan(0);
+    expect(connectorUploaded.attachmentId).toBe(mediaId);
+    expect(connectorRetry.attachmentId).toBe(mediaId);
+    expect(connectorUploaded.mimeType).toBe("image/png");
+    expect(connectorUploaded.url).toMatch(/^https?:\/\//);
+    expect(Number(connectorUploaded.width)).toBeGreaterThan(0);
+    expect(Number(connectorUploaded.height)).toBeGreaterThan(0);
+
+    const remoteUploaded = await call(editorialClient, "wordpress_upload_media", {
       sourceUrl: "https://s.w.org/about/images/logos/wordpress-logo-stacked-rgb.png",
       fileName: `editorial-publisher-e2e-${run}.png`,
       title: "Editorial Publisher acceptance image",
       altText: "WordPress logo used for a disposable acceptance test",
       idempotencyKey: randomUUID(),
     });
-    const mediaId = Number(object(uploaded.object).id);
-    expect(mediaId).toBeGreaterThan(0);
+    expect(Number(object(remoteUploaded.object).id)).toBeGreaterThan(0);
 
     const featured = await call(editorialClient, "wordpress_set_featured_image", {
       contentId,

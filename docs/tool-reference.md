@@ -29,4 +29,36 @@ All tools require OAuth and independently enforce connection scope plus WordPres
 
 Exact JSON schemas are defined once in `packages/contracts` and referenced by `packages/tool-schemas`. Unknown fields are rejected where practical. Consequential tokens expire in five minutes by default and are single-use even if the downstream operation fails; request a fresh review before retrying.
 
+## Uploading a ChatGPT-generated image
+
+`wordpress_upload_media` declares `file` in `_meta["openai/fileParams"]`. ChatGPT therefore supplies one top-level connector file object; a path string or a `{ "file_id": ... }` partial object is not valid. For an image generated at `/mnt/data/example.png`, the tool-call payload received by the MCP service is:
+
+```json
+{
+  "file": {
+    "download_url": "/mnt/data/example.png",
+    "file_id": "file_<runtime-provided-id>",
+    "mime_type": "image/png",
+    "file_name": "example.png"
+  },
+  "title": "Example image",
+  "altText": "Describe the image for screen-reader users",
+  "idempotencyKey": "<new-uuid>"
+}
+```
+
+`download_url` and `file_id` are required; ChatGPT normally fills the complete object when it binds the generated file to the declared `file` parameter. The temporary locator may be an approved HTTPS connector download or a runtime-mounted path. Mounted paths are realpath-checked against `CONNECTOR_UPLOAD_DIRS` (default `/mnt/data`), and the service rejects missing files, symlink escapes, unsafe names, oversized files, MIME/content mismatches, and non-image formats before forwarding a digest-bound multipart upload to WordPress.
+
+For a public remote image, omit `file` and use the separate HTTPS-only form:
+
+```json
+{
+  "sourceUrl": "https://images.example.com/example.png",
+  "fileName": "example.png",
+  "idempotencyKey": "<new-uuid>"
+}
+```
+
+`sandbox:` is not a remote URL and is rejected in `sourceUrl`. A connector runtime may use a `sandbox:` locator only inside the authorized `file` object, where it is resolved under the same mounted-directory restrictions.
+
 Common error codes: `authentication_required`, `connection_expired`, `scope_missing`, `capability_missing`, `validation_error`, `edit_conflict`, `unsupported`, `rate_limited`, `upstream_error`, `confirmation_required`, `confirmation_expired`, and `security_rejection`. Errors contain remediation and a request ID, never stack traces or secrets.

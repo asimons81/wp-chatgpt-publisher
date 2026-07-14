@@ -398,6 +398,12 @@ export class PostgresRepository implements Repository {
       JSON.stringify(response),
     ]);
   }
+  async releaseIdempotency(connectionId: string, key: string): Promise<void> {
+    await this.#pool.query(
+      "DELETE FROM idempotency WHERE connection_id=$1 AND key=$2 AND response IS NULL",
+      [connectionId, key],
+    );
+  }
   async #transaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
     const client = await this.#pool.connect();
     try {

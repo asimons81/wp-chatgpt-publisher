@@ -252,18 +252,31 @@ export const SearchMediaInputSchema = z
     cursor: z.string().max(500).optional(),
   })
   .strict();
+export const APPROVED_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "image/avif",
+] as const;
+export const ConnectorFileInputSchema = z
+  .object({
+    // ChatGPT may rewrite this temporary locator to an approved mounted path.
+    download_url: z.string().min(1).max(4096),
+    file_id: z.string().min(1).max(500),
+    mime_type: z.enum(APPROVED_IMAGE_MIME_TYPES).optional(),
+    file_name: z.string().min(1).max(240).optional(),
+  })
+  .strict();
+export type ConnectorFileInput = z.infer<typeof ConnectorFileInputSchema>;
 export const UploadMediaInputSchema = z
   .object({
-    file: z
-      .object({
-        download_url: z.string().url(),
-        file_id: z.string().min(1).max(500),
-        mime_type: z.string().max(200).optional(),
-        file_name: z.string().min(1).max(240).optional(),
-      })
-      .strict()
+    file: ConnectorFileInputSchema.optional(),
+    sourceUrl: z
+      .string()
+      .url()
+      .refine((value) => value.startsWith("https://"), "Remote media must use HTTPS")
       .optional(),
-    sourceUrl: z.string().url().optional(),
     fileName: z.string().min(1).max(240).optional(),
     title: z.string().max(500).optional(),
     caption: z.string().max(10_000).optional(),

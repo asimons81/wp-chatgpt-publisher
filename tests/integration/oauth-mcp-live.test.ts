@@ -210,6 +210,12 @@ live("complete OAuth, WordPress approval, and MCP workflow", () => {
       expect(listed.tools.map((tool) => tool.name).sort()).toEqual(
         TOOL_DEFINITIONS.map((tool) => tool.name).sort(),
       );
+      const upload = listed.tools.find((tool) => tool.name === "wordpress_upload_media");
+      expect(object(upload?._meta)["openai/fileParams"]).toEqual(["file"]);
+      const fileSchema = object(object(upload?.inputSchema).properties).file;
+      expect(object(fileSchema).type).toBe("object");
+      expect(object(object(fileSchema).properties).file_id).toMatchObject({ type: "string" });
+      expect(object(fileSchema).required).toEqual(["download_url", "file_id"]);
       for (const tool of listed.tools) {
         expect(tool.annotations?.openWorldHint).toBe(false);
         expect(object(tool._meta).securitySchemes).toBeDefined();

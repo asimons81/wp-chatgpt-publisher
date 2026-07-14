@@ -2,7 +2,7 @@
 
 ## Required configuration
 
-Production requires `PUBLIC_BASE_URL`, a durable PostgreSQL `DATABASE_URL`, and independent base64-encoded 32-byte `WPCP_ENCRYPTION_KEY` and `WPCP_TOKEN_SIGNING_KEY` values. It refuses missing database/keys or a non-HTTPS public URL. Configure exact `ALLOWED_ORIGINS`, trusted proxy hops, request timeouts, and response caps. The private-network development override is ignored in production.
+Production requires `PUBLIC_BASE_URL`, a durable PostgreSQL `DATABASE_URL`, and independent base64-encoded 32-byte `WPCP_ENCRYPTION_KEY` and `WPCP_TOKEN_SIGNING_KEY` values. It refuses missing database/keys or a non-HTTPS public URL. Configure exact `ALLOWED_ORIGINS`, trusted proxy hops, request timeouts, response caps, and `CONNECTOR_UPLOAD_DIRS` (the comma-separated mounted directories from which connector-authorized files may be read; default `/mnt/data`). The private-network development override is ignored in production.
 
 ## Deployment
 

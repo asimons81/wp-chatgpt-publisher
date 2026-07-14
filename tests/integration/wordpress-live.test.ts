@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 
 const base = process.env.WPCP_TEST_WP_URL;
@@ -21,6 +22,19 @@ async function call(
       "x-wpcp-request-id": crypto.randomUUID(),
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const data = (await response.json()) as Record<string, unknown>;
+  return { response, data };
+}
+
+async function callMultipart(path: string, token: string, form: FormData) {
+  const response = await fetch(`${base}/wp-json/wp-chatgpt-publisher/v1${path}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "x-wpcp-request-id": crypto.randomUUID(),
+    },
+    body: form,
   });
   const data = (await response.json()) as Record<string, unknown>;
   return { response, data };
@@ -121,5 +135,37 @@ live("live WordPress REST integration", () => {
     });
     expect(result.response.status).toBe(400);
     expect(JSON.stringify(result.data)).not.toMatch(/private network response|localhost body/i);
+  });
+  it("accepts an idempotent WordPress multipart media upload", async () => {
+    const bytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64",
+    );
+    const idempotencyKey = crypto.randomUUID();
+    const fileName = `connector-live-${crypto.randomUUID().slice(0, 8)}.png`;
+    const makeForm = () => {
+      const form = new FormData();
+      form.append("file", new Blob([bytes], { type: "image/png" }), fileName);
+      form.append("fileName", fileName);
+      form.append("fileSha256", createHash("sha256").update(bytes).digest("hex"));
+      form.append("title", "Connector multipart test");
+      form.append("altText", "One-pixel connector test image");
+      form.append("idempotencyKey", idempotencyKey);
+      return form;
+    };
+    const first = await callMultipart("/media/upload", editorialToken!, makeForm());
+    const retry = await callMultipart("/media/upload", editorialToken!, makeForm());
+    expect(first.response.status).toBe(200);
+    expect(retry.response.status).toBe(200);
+    expect(first.data.attachmentId).toBeGreaterThan(0);
+    expect(retry.data.attachmentId).toBe(first.data.attachmentId);
+    expect(first.data.mimeType).toBe("image/png");
+    expect(first.data.url).toMatch(/^https?:\/\//);
+    expect(first.data.width).toBe(1);
+    expect(first.data.height).toBe(1);
+    expect(first.data.metadata).toMatchObject({
+      altText: "One-pixel connector test image",
+      fileName,
+    });
   });
 });

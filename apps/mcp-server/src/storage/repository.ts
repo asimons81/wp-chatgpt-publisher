@@ -76,4 +76,5 @@ export interface Repository {
     requestHash: string,
   ): Promise<{ claimed: boolean; response: unknown }>;
   finishIdempotency(connectionId: string, key: string, response: unknown): Promise<void>;
+  releaseIdempotency(connectionId: string, key: string): Promise<void>;
 }

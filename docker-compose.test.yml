@@ -1,4 +1,8 @@
 services:
+  mcp-server:
+    volumes:
+      - ./docs/assets/brand:/mnt/data:ro
+
   wp-cli:
     image: wordpress:cli-2.12-php8.3
     depends_on:
