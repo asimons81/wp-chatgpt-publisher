@@ -57,6 +57,24 @@ function redirectWith(base: string, values: Record<string, string>): string {
   return url.toString();
 }
 
+export function canonicalWordPressSiteUrl(siteUrl: string, linkHeader: string | null): string {
+  const restRoot = linkHeader?.match(
+    /<([^>]+)>\s*;\s*rel=(?:"https:\/\/api\.w\.org\/"|https:\/\/api\.w\.org\/)/i,
+  )?.[1];
+  if (!restRoot) return siteUrl;
+  try {
+    const canonical = new URL(restRoot);
+    const suffix = "wp-json/";
+    if (!canonical.pathname.endsWith(suffix)) return siteUrl;
+    canonical.pathname = canonical.pathname.slice(0, -suffix.length);
+    canonical.search = "";
+    canonical.hash = "";
+    return canonical.toString().replace(/\/$/, "");
+  } catch {
+    return siteUrl;
+  }
+}
+
 export function createOAuthRouter(repository: Repository): Router {
   const router = express.Router();
   const box = new SecretBox(config.encryptionKey);
@@ -225,9 +243,9 @@ export function createOAuthRouter(repository: Repository): Router {
             400,
             "Start the connection again in ChatGPT.",
           );
-        const target = await validateExternalUrl(body.site_url, "site");
-        const siteUrl = target.url.toString().replace(/\/$/, "");
-        const discovery = await fetch(`${siteUrl}/wp-json/wp-chatgpt-publisher/v1/discovery`, {
+        let target = await validateExternalUrl(body.site_url, "site");
+        let siteUrl = target.url.toString().replace(/\/$/, "");
+        let discovery = await fetch(`${siteUrl}/wp-json/wp-chatgpt-publisher/v1/discovery`, {
           dispatcher: target.dispatcher,
           redirect: "error",
           signal: AbortSignal.timeout(config.wordpressRequestTimeoutMs),
@@ -239,6 +257,23 @@ export function createOAuthRouter(repository: Repository): Router {
             400,
             "Install and activate the WordPress plugin, confirm HTTPS, then retry.",
           );
+        const canonicalSiteUrl = canonicalWordPressSiteUrl(siteUrl, discovery.headers.get("link"));
+        if (canonicalSiteUrl !== siteUrl) {
+          target = await validateExternalUrl(canonicalSiteUrl, "site");
+          discovery = await fetch(`${canonicalSiteUrl}/wp-json/wp-chatgpt-publisher/v1/discovery`, {
+            dispatcher: target.dispatcher,
+            redirect: "error",
+            signal: AbortSignal.timeout(config.wordpressRequestTimeoutMs),
+          });
+          if (!discovery.ok)
+            throw new AppError(
+              "unsupported",
+              "Editorial Publisher for ChatGPT was not discovered at the canonical WordPress URL.",
+              400,
+              "Confirm the WordPress Address and Site Address settings, then retry.",
+            );
+          siteUrl = canonicalSiteUrl;
+        }
         await repository.setFlowSite(flow.id, siteUrl);
         const requestToken = await issueConnectionRequest(flow.id, siteUrl, flow.scopes);
         const approval = new URL(`${siteUrl}/wp-admin/admin.php`);
