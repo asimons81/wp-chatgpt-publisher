@@ -49,6 +49,10 @@ docker compose up -d --build
 
 The default local ports are WordPress `8080` and MCP `8787`; `MCP_HOST_PORT` can move the host-side MCP port. Use the complete seeded harness in [docs/test-harness.md](docs/test-harness.md) for real OAuth/E2E testing.
 
+### Using a coding agent
+
+Point the agent at the repository root. Agent-aware tools will automatically find [`AGENTS.md`](AGENTS.md), which routes them to the canonical [agent guide](docs/agent-guide.md) for architecture, safe setup, repository navigation, verification, and deployment boundaries.
+
 ## Install the WordPress plugin
 
 Build the uploadable release ZIP:
@@ -142,4 +146,4 @@ GPL-2.0-or-later for the complete repository. See [licensing](docs/licensing.md)
 
 ---
 
-*Built by [@tonysimons\_](https://x.com/tonysimons_) — because someone had to build the thing everyone said was a bad idea.*
+_Built by [@tonysimons\_](https://x.com/tonysimons_) — because someone had to build the thing everyone said was a bad idea._

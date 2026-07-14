@@ -4,7 +4,7 @@ Thank you for improving Editorial Publisher for ChatGPT.
 
 ## Setup
 
-Use Node.js 24 LTS, npm 11+, PHP 8.1+, and Docker. Copy `.env.example` to `.env`, use development-only random keys, run `npm install`, then `docker compose up --build`.
+Use Node.js 24 LTS, npm 11, PHP 8.1+, and Docker. Use `npm ci` for a reproducible dependency install. For the disposable full stack, environment values, seed commands, and safety boundaries, follow the [agent guide](docs/agent-guide.md); the same setup path works for human contributors.
 
 ## Standards
 
