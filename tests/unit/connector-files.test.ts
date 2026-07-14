@@ -157,7 +157,7 @@ describe("WordPress multipart normalization", () => {
     expect(first).not.toBe(second);
   });
 
-  it("uses stable connector identity instead of temporary download URLs for idempotency", () => {
+  it("uses caller fields instead of ephemeral connector references for idempotency", () => {
     const common = {
       idempotencyKey: crypto.randomUUID(),
       altText: "Example",
@@ -172,13 +172,18 @@ describe("WordPress multipart normalization", () => {
     const retried = stableHash(
       uploadIdempotencyInput({
         ...common,
-        file: { ...connector, download_url: "https://files.example/temporary-token-two" },
+        file: {
+          ...connector,
+          download_url: "https://files.example/temporary-token-two",
+          file_id: "file_rotated",
+        },
       }),
     );
     const changed = stableHash(
       uploadIdempotencyInput({
         ...common,
-        file: { ...connector, file_id: "file_different" },
+        altText: "Different caller input",
+        file: connector,
       }),
     );
     expect(retried).toBe(first);
