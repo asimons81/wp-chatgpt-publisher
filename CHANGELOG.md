@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Add a guarded `npm run update` command for safely fast-forwarding source checkouts, reinstalling locked dependencies, and rebuilding after explicit confirmation.
+- Add agent-discoverable repository instructions and a canonical architecture, setup, safety, and verification guide.
 
 All notable changes follow Keep a Changelog and Semantic Versioning.
 
