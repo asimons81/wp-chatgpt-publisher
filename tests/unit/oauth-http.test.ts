@@ -63,25 +63,32 @@ describe("OAuth HTTP contract", () => {
     return url;
   }
 
-  it("publishes the MCP endpoint as the canonical protected resource", async () => {
+  it("publishes the service URL as the canonical protected resource", async () => {
     const response = await fetch(new URL("/.well-known/oauth-protected-resource", baseUrl));
     const metadata = (await response.json()) as { resource?: string };
 
     expect(response.status).toBe(200);
-    expect(metadata.resource).toBe(config.mcpResourceUrl);
+    expect(metadata.resource).toBe(config.publicBaseUrl);
   });
 
   it("allows the OAuth form navigation to continue to an HTTPS WordPress site", async () => {
-    const response = await fetch(authorizeUrl(config.mcpResourceUrl));
+    const response = await fetch(authorizeUrl(config.publicBaseUrl));
     const policy = response.headers.get("content-security-policy") ?? "";
 
     expect(response.status).toBe(200);
     expect(policy).toContain("form-action 'self' https:");
+    expect(createdFlow?.resource).toBe(config.publicBaseUrl);
+  });
+
+  it("accepts the MCP endpoint resource used by previously discovered clients", async () => {
+    const response = await fetch(authorizeUrl(config.mcpResourceUrl));
+
+    expect(response.status).toBe(200);
     expect(createdFlow?.resource).toBe(config.mcpResourceUrl);
   });
 
-  it("rejects a resource identifier that does not match the MCP endpoint", async () => {
-    const response = await fetch(authorizeUrl(config.publicBaseUrl));
+  it("rejects a resource identifier that does not belong to this service", async () => {
+    const response = await fetch(authorizeUrl("https://unrelated.example/mcp"));
 
     expect(response.status).toBe(400);
     expect(createdFlow).toBeUndefined();

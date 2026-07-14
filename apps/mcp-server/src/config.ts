@@ -62,12 +62,14 @@ const parsed = ConfigSchema.superRefine((_value, ctx) => {
 }).parse(environment);
 const developmentKey = Buffer.alloc(32, 7).toString("base64");
 const publicBaseUrl = parsed.PUBLIC_BASE_URL.replace(/\/$/, "");
+const mcpResourceUrl = `${publicBaseUrl}/mcp`;
 
 export const config = {
   nodeEnv: parsed.NODE_ENV,
   port: parsed.PORT,
   publicBaseUrl,
-  mcpResourceUrl: `${publicBaseUrl}/mcp`,
+  mcpResourceUrl,
+  oauthResourceUrls: [publicBaseUrl, mcpResourceUrl],
   databaseUrl: parsed.DATABASE_URL,
   encryptionKey: parsed.WPCP_ENCRYPTION_KEY ?? developmentKey,
   tokenSigningKey: parsed.WPCP_TOKEN_SIGNING_KEY ?? developmentKey,

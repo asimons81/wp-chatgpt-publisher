@@ -88,7 +88,7 @@ live("complete OAuth, WordPress approval, and MCP workflow", () => {
       client_id: clientId,
       redirect_uri: callback,
       state,
-      resource: `${service}/mcp`,
+      resource: service!,
       scope: SCOPES.join(" "),
       code_challenge: challenge,
       code_challenge_method: "S256",

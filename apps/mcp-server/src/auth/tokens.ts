@@ -102,22 +102,31 @@ export async function verifyConnectionRequest(token: string): Promise<Connection
 }
 export async function verifyAccessToken(
   token: string,
-  expectedAudience = config.mcpResourceUrl,
+  expectedAudience: string | readonly string[] = config.oauthResourceUrls,
 ): Promise<ToolContext> {
   try {
+    const acceptedAudiences =
+      typeof expectedAudience === "string" ? [expectedAudience] : [...expectedAudience];
     const verified = await jwtVerify(token, signingKey, {
       issuer: config.publicBaseUrl,
-      audience: expectedAudience,
+      audience: acceptedAudiences,
       algorithms: ["HS256"],
     });
     const clientId = verified.payload.client_id;
     const connectionId = verified.payload.connection_id;
     const rawScope = verified.payload.scope;
+    const tokenAudiences = Array.isArray(verified.payload.aud)
+      ? verified.payload.aud
+      : [verified.payload.aud];
+    const audience = tokenAudiences.find(
+      (value): value is string => typeof value === "string" && acceptedAudiences.includes(value),
+    );
     if (
       typeof clientId !== "string" ||
       typeof connectionId !== "string" ||
       typeof rawScope !== "string" ||
-      typeof verified.payload.sub !== "string"
+      typeof verified.payload.sub !== "string" ||
+      !audience
     )
       throw new Error("Required claims are missing");
     return {
@@ -125,7 +134,7 @@ export async function verifyAccessToken(
       clientId,
       connectionId,
       scopes: ScopeSchema.array().parse(rawScope.split(" ").filter(Boolean)),
-      audience: expectedAudience,
+      audience,
       requestId: randomUUID(),
     };
   } catch (error) {
