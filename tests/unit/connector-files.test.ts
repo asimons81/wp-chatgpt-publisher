@@ -157,28 +157,28 @@ describe("WordPress multipart normalization", () => {
     expect(first).not.toBe(second);
   });
 
-  it("uses verified file content instead of temporary connector references for idempotency", () => {
+  it("uses stable connector identity instead of temporary download URLs for idempotency", () => {
     const common = {
       idempotencyKey: crypto.randomUUID(),
       altText: "Example",
     };
-    const resolved = {
-      bytes: new Uint8Array(PNG),
-      fileName: "example.png",
-      mimeType: "image/png" as const,
-      sha256: "a".repeat(64),
+    const connector = {
+      download_url: "https://files.example/temporary-token-one",
+      file_id: "file_stable",
+      file_name: "example.png",
+      mime_type: "image/png",
     };
-    const first = stableHash(uploadIdempotencyInput({ ...common, file: resolved }));
+    const first = stableHash(uploadIdempotencyInput({ ...common, file: connector }));
     const retried = stableHash(
       uploadIdempotencyInput({
         ...common,
-        file: { ...resolved, bytes: new Uint8Array(PNG) },
+        file: { ...connector, download_url: "https://files.example/temporary-token-two" },
       }),
     );
     const changed = stableHash(
       uploadIdempotencyInput({
         ...common,
-        file: { ...resolved, sha256: "b".repeat(64) },
+        file: { ...connector, file_id: "file_different" },
       }),
     );
     expect(retried).toBe(first);
