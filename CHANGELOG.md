@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a guarded `npm run update` command for safely fast-forwarding source checkouts, reinstalling locked dependencies, and rebuilding after explicit confirmation.
+
 All notable changes follow Keep a Changelog and Semantic Versioning.
 
 ## [1.0.2] - 2026-07-13
