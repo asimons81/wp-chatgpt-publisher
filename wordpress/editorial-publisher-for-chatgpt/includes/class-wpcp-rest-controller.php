@@ -670,34 +670,65 @@ final class WPCP_REST_Controller extends WP_REST_Controller {
 				require_once ABSPATH . 'wp-admin/includes/file.php';
 				require_once ABSPATH . 'wp-admin/includes/media.php';
 				require_once ABSPATH . 'wp-admin/includes/image.php';
+				$files     = $request->get_file_params();
+				$upload    = isset( $files['file'] ) && is_array( $files['file'] ) ? $files['file'] : null;
 				$url       = esc_url_raw( (string) $request['sourceUrl'] );
-				$file_name = sanitize_file_name( (string) $request['fileName'] );
-				if ( ! $url || ! str_starts_with( $url, 'https://' ) ) {
+				$file_name = sanitize_file_name( (string) ( $request['fileName'] ? $request['fileName'] : ( $upload['name'] ?? '' ) ) );
+				if ( (bool) $upload === (bool) $url ) {
+					return new WP_Error( 'wpcp_media_source_required', __( 'Provide exactly one multipart connector file or approved HTTPS image URL.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 400 ) );
+				}
+				if ( $url && ! str_starts_with( $url, 'https://' ) ) {
 					return new WP_Error( 'wpcp_unsafe_media_url', __( 'Remote media must use an approved HTTPS URL.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 400 ) );
 				}
 				if ( '' === $file_name || ! preg_match( '/\.(?:jpe?g|png|gif|webp|avif)$/i', $file_name ) ) {
 					return new WP_Error( 'wpcp_unsafe_filename', __( 'The image filename must use a supported image extension.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 400 ) );
 				}
-				$response = wp_safe_remote_get(
-					$url,
-					array(
-						'timeout'             => 15,
-						'redirection'         => 0,
-						'limit_response_size' => wp_max_upload_size(),
-						'headers'             => array( 'Accept' => 'image/*' ),
-					)
-				);
-				if ( is_wp_error( $response ) ) {
-					return new WP_Error( 'wpcp_media_fetch_failed', __( 'The remote image could not be fetched safely.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 400 ) );
-				} if ( 200 !== wp_remote_retrieve_response_code( $response ) ) {
-					return new WP_Error( 'wpcp_media_fetch_failed', __( 'The remote image did not return a successful response.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 400 ) );
-				} $body = wp_remote_retrieve_body( $response );
-				if ( '' === $body || strlen( $body ) > wp_max_upload_size() ) {
-					return new WP_Error( 'wpcp_file_too_large', __( 'The image exceeds the WordPress upload limit.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 413 ) );
-				} $tmp = wp_tempnam( $file_name );
-				if ( ! $tmp ) {
-					return new WP_Error( 'wpcp_upload_failed', __( 'WordPress could not create a temporary upload file.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 500 ) );
-				} file_put_contents( $tmp, $body ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+				if ( $upload ) {
+					$tmp = isset( $upload['tmp_name'] ) ? (string) $upload['tmp_name'] : '';
+					if ( UPLOAD_ERR_OK !== (int) ( $upload['error'] ?? UPLOAD_ERR_NO_FILE ) || '' === $tmp || ! is_uploaded_file( $tmp ) ) {
+						return new WP_Error( 'wpcp_upload_failed', __( 'WordPress did not receive a valid multipart connector file.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 400 ) );
+					}
+					$file_size = filesize( $tmp );
+					if ( false === $file_size ) {
+						return new WP_Error( 'wpcp_upload_failed', __( 'WordPress could not inspect the uploaded file.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 500 ) );
+					}
+					if ( $file_size > wp_max_upload_size() ) {
+						return new WP_Error( 'wpcp_file_too_large', __( 'The image exceeds the WordPress upload limit.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 413 ) );
+					}
+					$expected_hash = (string) $request['fileSha256'];
+					$actual_hash   = hash_file( 'sha256', $tmp );
+					if ( ! preg_match( '/^[a-f0-9]{64}$/', $expected_hash ) || ! is_string( $actual_hash ) || ! hash_equals( $expected_hash, $actual_hash ) ) {
+						return new WP_Error( 'wpcp_upload_hash_mismatch', __( 'The multipart image did not match the connector file digest.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 400 ) );
+					}
+				} else {
+					$response = wp_safe_remote_get(
+						$url,
+						array(
+							'timeout'             => 15,
+							'redirection'         => 0,
+							'limit_response_size' => wp_max_upload_size(),
+							'headers'             => array( 'Accept' => 'image/*' ),
+						)
+					);
+					if ( is_wp_error( $response ) ) {
+						return new WP_Error( 'wpcp_media_fetch_failed', __( 'The remote image could not be fetched safely.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 400 ) );
+					}
+					if ( 200 !== wp_remote_retrieve_response_code( $response ) ) {
+						return new WP_Error( 'wpcp_media_fetch_failed', __( 'The remote image did not return a successful response.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 400 ) );
+					}
+					$body = wp_remote_retrieve_body( $response );
+					if ( '' === $body || strlen( $body ) > wp_max_upload_size() ) {
+						return new WP_Error( 'wpcp_file_too_large', __( 'The image exceeds the WordPress upload limit.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 413 ) );
+					}
+					$tmp = wp_tempnam( $file_name );
+					if ( ! $tmp ) {
+						return new WP_Error( 'wpcp_upload_failed', __( 'WordPress could not create a temporary upload file.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 500 ) );
+					}
+					if ( strlen( $body ) !== file_put_contents( $tmp, $body ) ) { // phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_file_put_contents
+						wp_delete_file( $tmp );
+						return new WP_Error( 'wpcp_upload_failed', __( 'WordPress could not stage the remote image.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 500 ) );
+					}
+				}
 				$finfo = new finfo( FILEINFO_MIME_TYPE );
 				$mime  = $finfo->file( $tmp );
 				if ( ! is_string( $mime ) || ! in_array(
@@ -759,13 +790,30 @@ final class WPCP_REST_Controller extends WP_REST_Controller {
 				if ( ! $attachment instanceof WP_Post ) {
 					return new WP_Error( 'wpcp_upload_failed', __( 'WordPress could not reload the new attachment.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 500 ) );
 				}
-				return $this->write_result(
+				$result     = $this->write_result(
 					$request,
 					$attachment,
 					'upload_media',
 					array( 'file', 'title', 'caption', 'description', 'altText' ),
 					null
 				);
+				$data       = $result->get_data();
+				$image_meta = wp_get_attachment_metadata( $attachment_id );
+				$data      += array(
+					'attachmentId' => $attachment_id,
+					'url'          => wp_get_attachment_url( $attachment_id ),
+					'mimeType'     => get_post_mime_type( $attachment_id ),
+					'width'        => (int) ( is_array( $image_meta ) ? ( $image_meta['width'] ?? 0 ) : 0 ),
+					'height'       => (int) ( is_array( $image_meta ) ? ( $image_meta['height'] ?? 0 ) : 0 ),
+					'metadata'     => array(
+						'title'       => $attachment->post_title,
+						'caption'     => $attachment->post_excerpt,
+						'description' => $attachment->post_content,
+						'altText'     => get_post_meta( $attachment_id, '_wp_attachment_image_alt', true ),
+						'fileName'    => wp_basename( (string) get_attached_file( $attachment_id ) ),
+					),
+				);
+				return rest_ensure_response( $data );
 			}
 		); }
 	/**
@@ -1043,6 +1091,9 @@ final class WPCP_REST_Controller extends WP_REST_Controller {
 		$connection    = WPCP_Auth::connection( $request );
 		$connection_id = (string) $connection['id'];
 		$params        = $request->get_json_params();
+		if ( ! is_array( $params ) ) {
+			$params = $request->get_body_params();
+		}
 		unset( $params['confirmationToken'] );
 		$encoded_params = wp_json_encode( $params );
 		if ( false === $encoded_params ) {

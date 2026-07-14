@@ -1,10 +1,11 @@
-import { createHash } from "node:crypto";
 import type { Connection } from "@wp-chatgpt-publisher/contracts";
 import { fetch } from "undici";
 import { config } from "../config.js";
 import { AppError } from "../errors.js";
 import { SecretBox } from "../security/crypto.js";
 import { validateExternalUrl } from "../security/ssrf.js";
+import type { ResolvedConnectorUpload } from "../media/connector-files.js";
+import { uploadForm } from "./payload.js";
 
 const box = new SecretBox(config.encryptionKey);
 const endpointMap: Record<string, { method: "GET" | "POST" | "PATCH"; path: string }> = {
@@ -46,16 +47,18 @@ export class WordPressClient {
     const credential = box.decrypt(connection.credentialCiphertext, connection.id);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.wordpressRequestTimeoutMs);
+    const upload = tool === "wordpress_upload_media" ? resolvedUpload(input) : null;
+    const form = upload ? uploadForm(upload.file, upload.fields) : null;
     try {
       const response = await fetch(url, {
         method: endpoint.method,
         headers: {
           authorization: `Bearer ${credential}`,
-          "content-type": "application/json",
+          ...(form ? {} : { "content-type": "application/json" }),
           accept: "application/json",
           "x-wpcp-request-id": requestId,
         },
-        ...(endpoint.method === "GET" ? {} : { body: JSON.stringify(input) }),
+        ...(endpoint.method === "GET" ? {} : { body: form ?? JSON.stringify(input) }),
         dispatcher: target.dispatcher,
         redirect: "error",
         signal: controller.signal,
@@ -98,7 +101,9 @@ export class WordPressClient {
           code,
           typeof source.message === "string"
             ? source.message.slice(0, 500)
-            : "WordPress rejected the operation.",
+            : upload
+              ? "The WordPress REST media upload failed."
+              : "WordPress rejected the operation.",
           response.status,
           typeof source.remediation === "string" ? source.remediation.slice(0, 500) : undefined,
           response.status >= 500 || response.status === 429,
@@ -114,14 +119,40 @@ export class WordPressClient {
           "Use filters, pagination, or a smaller field selection.",
         );
       return body;
+    } catch (cause) {
+      if (cause instanceof AppError) throw cause;
+      if (upload) {
+        throw new AppError(
+          "upstream_error",
+          "The WordPress REST media upload failed.",
+          502,
+          "Check the WordPress connection and upload limit, then retry once.",
+          true,
+          requestId,
+        );
+      }
+      throw cause;
     } finally {
       clearTimeout(timeout);
     }
   }
 }
 
-export function stableHash(value: unknown): string {
-  return createHash("sha256")
-    .update(JSON.stringify(value, Object.keys(value as object).sort()))
-    .digest("base64url");
+interface ResolvedUploadInput {
+  readonly file: ResolvedConnectorUpload;
+  readonly fields: Record<string, string>;
+}
+
+function resolvedUpload(input: unknown): ResolvedUploadInput | null {
+  if (!input || typeof input !== "object") return null;
+  const source = input as Record<string, unknown>;
+  const file = source.file;
+  if (!file || typeof file !== "object" || !(file as Record<string, unknown>).bytes) return null;
+  const resolved = file as ResolvedConnectorUpload;
+  if (!(resolved.bytes instanceof Uint8Array)) return null;
+  const fields: Record<string, string> = {};
+  for (const key of ["title", "caption", "description", "altText", "idempotencyKey"] as const) {
+    if (typeof source[key] === "string") fields[key] = source[key];
+  }
+  return { file: resolved, fields };
 }
