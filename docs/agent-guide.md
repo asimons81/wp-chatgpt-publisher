@@ -20,6 +20,15 @@ ChatGPT -> OAuth-protected MCP service -> scoped WordPress plugin REST API -> Wo
 
 Authorization is intentionally checked at both the service and plugin boundaries. Published edits, scheduling, and publishing require a short-lived confirmation bound to the action, content, version, and payload. Retrieved WordPress content is untrusted data, not instructions.
 
+### Why authentication has two layers
+
+There are two credentials because the service and the WordPress site are separate trust boundaries:
+
+1. **ChatGPT -> MCP service:** OAuth proves which ChatGPT client, user, connection, resource, and scopes may call the service. PKCE means the client creates a one-time secret (`code_verifier`) and sends only its hash (`code_challenge`) before login; a stolen authorization code is therefore useless without the original verifier.
+2. **MCP service -> WordPress plugin:** the WordPress user logs in on their own site and approves a separate, scoped integration credential. The MCP service never receives the user's WordPress password. WordPress can revoke this credential and re-check the user's current native capabilities independently of the ChatGPT access token.
+
+In practice, locate an authentication failure by where the browser or request stops: before WordPress approval, inspect MCP OAuth discovery, client, redirect, resource, state, and PKCE handling; on the WordPress approval screen, inspect login, nonce, scope, and capability checks; after approval, inspect the one-time grant and callback; if connection succeeds but a tool is denied, inspect the intersection of OAuth scope, connection scope, current WordPress capability, plugin policy, and tool requirements. Do not remove either layer to simplify debugging.
+
 Before editing, read:
 
 - [`architecture.md`](architecture.md) for trust boundaries and request flow.
@@ -61,6 +70,20 @@ Before any setup or change:
 6. Do not run `docker compose down -v`, destructive WP-CLI commands, production deployment, database rollback, key rotation, or publishing actions without explicit approval.
 7. Keep tool schemas and security schemes static and reviewed. Never weaken permission, confirmation, SSRF, MIME, timeout, response-size, or logging controls to make a demo pass.
 
+## First commands
+
+Start every session by checking the worktree. On a fresh clone, or whenever dependencies may be stale, establish a reproducible baseline before starting a watcher or test:
+
+```sh
+git status --short
+node --version
+npm --version
+npm ci
+npm run build
+```
+
+Use Node.js 24 LTS and npm 11. Preserve anything reported by `git status`; `npm ci` must not change `package-lock.json`. If dependencies are already installed and the task is a read-only inspection or documentation-only change, record that fact and proceed without reinstalling them.
+
 ## Choose the setup depth
 
 ### A. Understand or edit the repository
@@ -77,13 +100,36 @@ npm run build
 
 Expected result: all workspaces build into their ignored `dist/` directories. `npm ci` must not change `package-lock.json`.
 
-For a development server after dependencies are installed, `.env` is configured, and PostgreSQL is available:
+### What `npm run dev` starts
+
+Use a dedicated terminal because this command stays running until interrupted:
 
 ```sh
 npm run dev
 ```
 
-This starts the MCP service and UI watchers. It does not provide PostgreSQL or WordPress; use the disposable stack below for a complete local topology.
+It first builds the shared contracts and tool schemas, then runs two labeled processes in the same terminal:
+
+| Process  | Command                           | Default address         | Purpose                                                     |
+| -------- | --------------------------------- | ----------------------- | ----------------------------------------------------------- |
+| `server` | `tsx watch src/index.ts`          | `http://127.0.0.1:8787` | Restarts the MCP/OAuth service after server source changes  |
+| `ui`     | `vite --host 0.0.0.0 --port 5173` | `http://127.0.0.1:5173` | Serves and rebuilds the embedded React UI during UI changes |
+
+Preconditions:
+
+- `npm ci` has completed.
+- A PostgreSQL database is already reachable from the host at `DATABASE_URL`; the development default is `postgresql://wpcp:wpcp@127.0.0.1:5432/wpcp`.
+- Any non-default settings needed by the server are exported into the terminal environment. The local Node watcher does **not** load the repository `.env` file; Compose does.
+- WordPress is reachable only when exercising discovery, approval, or editorial tools. It is not needed merely to compile or open the UI fixture view.
+
+The command does not start PostgreSQL or WordPress. The Compose PostgreSQL service is internal to the Compose network and is not exposed to a host-run watcher. Use setup B for the repository-provided complete topology, or use an already authorized host-reachable development PostgreSQL instance. Do not run the Compose `mcp-server` and the host watcher on the same port.
+
+After the `server` process reports it is ready, verify process and database health from another terminal:
+
+```sh
+node scripts/wait-for-http.mjs http://127.0.0.1:8787/healthz 60000
+node scripts/wait-for-http.mjs http://127.0.0.1:8787/readyz 60000
+```
 
 ### B. Start the disposable full stack
 
@@ -124,6 +170,16 @@ Verify these local endpoints:
 | `http://wordpress.lvh.me:8080/wp-admin/`                                 | Disposable WordPress login    |
 
 Use the exact live-test environment variables and commands in [`test-harness.md`](test-harness.md). Fast test runs intentionally skip live suites when those variables are absent.
+
+### HTTP readiness helper
+
+`scripts/wait-for-http.mjs` can wait for any unauthenticated HTTP endpoint, not only the Docker workflow:
+
+```sh
+node scripts/wait-for-http.mjs <url> [timeout-ms]
+```
+
+The timeout defaults to 60 seconds. The helper polls once per second, treats any successful HTTP status as ready, prints the URL when ready, and exits nonzero with the last connection or HTTP error on timeout. Use `/healthz` to prove the process is accepting requests and `/readyz` to prove its PostgreSQL dependency is ready. It does not start or repair the service.
 
 To stop containers without deleting data:
 
@@ -194,14 +250,44 @@ npm run release:check
 
 Do not claim live behavior from skipped tests. Report passed, failed, and skipped checks separately, along with any missing dependency or account-gated step.
 
-## Common setup failures
+## Error-recovery flow
 
-- **Wrong Node/npm version:** use Node 24 LTS and npm 11; do not regenerate the lockfile with an unsupported toolchain.
-- **Port 8787 already in use:** set `MCP_HOST_PORT` in `.env` and update the local `PUBLIC_BASE_URL` to match.
-- **Service unhealthy:** inspect `docker compose ... ps` and recent service logs, then verify PostgreSQL health and required environment variables without printing secret values.
-- **WordPress reports “already installed”:** do not reset it automatically. Verify the target is the disposable stack, then seed it directly if appropriate.
-- **Plugin discovery fails:** verify WordPress installation, plugin activation, pretty permalinks, REST access, and the discovery URL.
-- **Live tests skip:** set the variables documented in [`test-harness.md`](test-harness.md); a skip is not proof of the live path.
+Preserve the first failing command and error message, then follow the matching branch. Fix one prerequisite at a time and rerun the same command before moving down the tree.
+
+### 1. Install or build fails
+
+1. Run `node --version` and `npm --version`. Use Node 24 LTS and npm 11; do not regenerate the lockfile with an unsupported toolchain.
+2. Run `git status --short`. Preserve existing changes and confirm `package-lock.json` was not altered.
+3. Run `npm ci` again only after correcting the runtime or registry/network issue, then run `npm run build`.
+4. If one workspace fails, use the repository map and the first error—not later cascading errors—to identify the owning boundary.
+
+### 2. `npm run dev` exits or one labeled process fails
+
+1. If a module or shared-package build is missing, complete the first-command baseline above.
+2. If the `server` process reports a PostgreSQL connection or migration error, confirm that `DATABASE_URL` is present in the terminal environment when needed and that its host and port are reachable. Do not print the credential or silently point it at a real database. If no approved host PostgreSQL exists, stop the watcher and use setup B.
+3. If port 8787 or 5173 is occupied, identify whether a prior watcher or Compose service owns it and stop that known local process safely. For Compose-only port 8787 conflicts, set `MCP_HOST_PORT` in `.env` and update local `PUBLIC_BASE_URL`; that variable does not change the host watcher port.
+4. If `ui` is running but `server` failed, the fixture UI can still render, but OAuth, MCP, and WordPress behavior is not available. Do not report the app as ready.
+5. When both labels stay running, check `/healthz`, then `/readyz`. A healthy-but-not-ready service means the process is up but PostgreSQL is not usable.
+
+### 3. Disposable stack is not ready
+
+1. Run `docker compose -f docker-compose.yml -f docker-compose.test.yml ps`.
+2. Inspect recent logs only for the unhealthy service. Verify PostgreSQL/MariaDB health and required environment-variable **presence** without printing secret values.
+3. Wait on WordPress and then service readiness with `scripts/wait-for-http.mjs`; container startup is asynchronous.
+4. If WordPress reports "already installed," do not reset it automatically. Confirm the target is disposable, then seed it directly if appropriate.
+5. If plugin discovery fails, verify WordPress installation, plugin activation, pretty permalinks, REST access, and the exact discovery URL in that order.
+
+### 4. OAuth or authorization fails
+
+1. **No WordPress approval page:** verify MCP health/readiness, both OAuth metadata documents, the exact client redirect URI, resource/audience, state, and S256 PKCE inputs.
+2. **Failure on the WordPress approval page:** verify the site login, nonce, requested scopes, approving user's native capabilities, and plugin REST availability.
+3. **Failure returning from WordPress:** inspect the short-lived one-time grant and exact callback/redirect without logging the code, grant, or credential.
+4. **Connection succeeds but a tool returns 401/403:** distinguish an expired/revoked ChatGPT token from a revoked WordPress credential, then check OAuth scope, connection scope, current WordPress capability, plugin policy, and tool requirement. A valid outer token does not override a failed inner check.
+5. **A consequential action requests confirmation again:** generate a new review/confirmation. Confirmations are short-lived, single-use, and bound to the exact action, content, version, payload, and connection; never reuse or relax them.
+
+### 5. Tests or tooling do not exercise the expected path
+
+- **Live tests skip:** set only the variables documented in [`test-harness.md`](test-harness.md); a skip is not proof of the live path.
 - **Private-network rejection:** the local override works only in development. Never enable it as a production workaround.
 - **PHP tooling unavailable:** use the documented `npm run php:*` path and confirm Docker/Composer prerequisites instead of silently skipping checks.
 - **Dirty checkout blocks `npm run update`:** preserve the changes and ask the user whether to commit or stash them; never discard them automatically.
