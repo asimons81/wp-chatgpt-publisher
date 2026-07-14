@@ -1,5 +1,13 @@
 # Editorial Publisher for ChatGPT
 
+[![GitHub Release](https://img.shields.io/github/v/release/asimons81/wp-chatgpt-publisher?style=flat&label=release)](https://github.com/asimons81/wp-chatgpt-publisher/releases/latest)
+[![Docker Pulls](https://img.shields.io/badge/docker-ghcr.io-blue?style=flat)](https://github.com/asimons81/wp-chatgpt-publisher/pkgs/container/wp-chatgpt-publisher)
+[![CI](https://github.com/asimons81/wp-chatgpt-publisher/actions/workflows/ci.yml/badge.svg)](https://github.com/asimons81/wp-chatgpt-publisher/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-GPL--2.0--or--later-green?style=flat)](LICENSE)
+[![Built By](https://img.shields.io/badge/built%20by-@tonysimons_-blue?style=flat&logo=x)](https://x.com/tonysimons_)
+
+> "No OpenAI API key required" is not a feature. It's a warning that we don't trust you with a credit card either.
+
 Editorial Publisher for ChatGPT is an open-source ChatGPT app for secure WordPress editorial work. It can search and retrieve content, create and revise drafts, manage images, taxonomy, and SEO metadata, preview changes, and explicitly confirm scheduling or publishing.
 
 > No OpenAI API key is required. The project does not call an LLM or the OpenAI API, so it creates no separate pay-per-token OpenAI API bill. Normal ChatGPT plan limits still apply.
@@ -63,6 +71,16 @@ The service requires PostgreSQL and two independent 32-byte secrets. Supported p
 
 See [self-hosting](docs/self-hosting.md) for environment variables, PostgreSQL, Vercel, backups, rotation, scaling, upgrades, and rollback. No proprietary relay is mandatory.
 
+### Update a source checkout
+
+From a clean Git checkout on a branch with a configured upstream, check for an update without changing files:
+
+```sh
+npm run update -- --check
+```
+
+Run `npm run update` to review and confirm the exact fast-forward, or use `npm run update -- --yes` in non-interactive automation. The updater refuses dirty, detached, locally ahead, and diverged checkouts. After the fast-forward it installs the exact lockfile dependencies without lifecycle scripts and rebuilds the project. It does not deploy or restart the service, migrate infrastructure, modify secrets or databases, or replace the separately installed WordPress plugin; follow the deployment-specific upgrade and rollback steps in [self-hosting](docs/self-hosting.md).
+
 ## Connect from ChatGPT
 
 Deploy the service on public HTTPS, then follow [ChatGPT setup](docs/chatgpt-setup.md). The OAuth flow redirects to the user's own WordPress login and approval screen; the normal WordPress password never passes through the MCP service or ChatGPT.
@@ -121,3 +139,7 @@ All local implementation, packaging, security, full-stack, lifecycle, and browse
 ## License
 
 GPL-2.0-or-later for the complete repository. See [licensing](docs/licensing.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
+
+---
+
+*Built by [@tonysimons\_](https://x.com/tonysimons_) — because someone had to build the thing everyone said was a bad idea.*
