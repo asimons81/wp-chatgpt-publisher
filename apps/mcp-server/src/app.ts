@@ -49,7 +49,9 @@ export function createApp(repository: Repository) {
         directives: {
           defaultSrc: ["'none'"],
           frameAncestors: ["'none'"],
-          formAction: ["'self'"],
+          // The OAuth form posts locally, then intentionally redirects to the
+          // HTTPS WordPress site that passed discovery and SSRF validation.
+          formAction: ["'self'", "https:"],
           styleSrc: ["'self'", "'unsafe-inline'"],
           scriptSrc: ["'self'"],
         },

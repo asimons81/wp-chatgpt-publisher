@@ -48,14 +48,14 @@ describe("signed WordPress connection requests", () => {
       clientId: "chatgpt-test-client",
       connectionId,
       scopes: ["site:read", "content:read"],
-      audience: "http://127.0.0.1:8787",
+      audience: "http://127.0.0.1:8787/mcp",
     });
     await expect(verifyAccessToken(token)).resolves.toMatchObject({
       subject: "wordpress-user-7",
       clientId: "chatgpt-test-client",
       connectionId,
       scopes: ["site:read", "content:read"],
-      audience: "http://127.0.0.1:8787",
+      audience: "http://127.0.0.1:8787/mcp",
     });
     await expect(verifyAccessToken(token, "https://wrong.example")).rejects.toMatchObject({
       code: "authentication_required",

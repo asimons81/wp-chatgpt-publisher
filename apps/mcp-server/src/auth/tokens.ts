@@ -102,7 +102,7 @@ export async function verifyConnectionRequest(token: string): Promise<Connection
 }
 export async function verifyAccessToken(
   token: string,
-  expectedAudience = config.publicBaseUrl,
+  expectedAudience = config.mcpResourceUrl,
 ): Promise<ToolContext> {
   try {
     const verified = await jwtVerify(token, signingKey, {

@@ -62,7 +62,7 @@ export function createOAuthRouter(repository: Repository): Router {
   const box = new SecretBox(config.encryptionKey);
   router.get("/.well-known/oauth-protected-resource", (_request, response) =>
     response.json({
-      resource: config.publicBaseUrl,
+      resource: config.mcpResourceUrl,
       authorization_servers: [config.publicBaseUrl],
       scopes_supported: SCOPES,
       resource_documentation: `${config.publicBaseUrl}/docs`,
@@ -169,7 +169,7 @@ export function createOAuthRouter(repository: Repository): Router {
           "The authorization request is incomplete or unsupported.",
           400,
         );
-      if (resource !== config.publicBaseUrl)
+      if (resource !== config.mcpResourceUrl)
         throw new AppError(
           "security_rejection",
           "The OAuth resource does not match this server.",

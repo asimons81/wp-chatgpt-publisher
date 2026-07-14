@@ -119,7 +119,7 @@ export async function authorizeMcp(options: OAuthFixtureOptions): Promise<OAuthF
     client_id: clientId,
     redirect_uri: callback,
     state,
-    resource: options.service,
+    resource: `${options.service}/mcp`,
     scope: options.scopes.join(" "),
     code_challenge: challenge,
     code_challenge_method: "S256",
