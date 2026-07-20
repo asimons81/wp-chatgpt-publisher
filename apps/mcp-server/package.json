@@ -11,20 +11,20 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/ext-apps": "latest",
-    "@modelcontextprotocol/sdk": "latest",
+    "@modelcontextprotocol/ext-apps": "*",
+    "@modelcontextprotocol/sdk": "*",
     "@wp-chatgpt-publisher/contracts": "1.0.2",
     "@wp-chatgpt-publisher/tool-schemas": "1.0.2",
-    "cors": "latest",
-    "express": "latest",
-    "express-rate-limit": "latest",
-    "helmet": "latest",
-    "ipaddr.js": "latest",
-    "jose": "latest",
-    "pg": "latest",
-    "pino": "latest",
-    "pino-http": "latest",
-    "undici": "latest",
+    "cors": "*",
+    "express": "*",
+    "express-rate-limit": "8.6.0",
+    "helmet": "*",
+    "ipaddr.js": "*",
+    "jose": "*",
+    "pg": "*",
+    "pino": "*",
+    "pino-http": "*",
+    "undici": "*",
     "zod": "4.4.3"
   }
 }
