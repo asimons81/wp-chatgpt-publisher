@@ -239,25 +239,46 @@ final class WPCP_Admin {
 			$wpdb->delete( $connections, array( 'id' => $connection_id ), array( '%s' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Rolls back plugin-owned connection state.
 			wp_die( esc_html__( 'WordPress could not securely persist the connection approval. Please try again.', 'editorial-publisher-for-chatgpt' ), '', array( 'response' => 500 ) );
 		}
-		$callback     = add_query_arg(
+		$callback = add_query_arg(
 			array(
 				'flow'  => (string) $payload['flow_id'],
 				'grant' => $grant,
 			),
 			$service . '/connect/callback'
 		);
-		$service_host = wp_parse_url( $service, PHP_URL_HOST );
-		if ( ! is_string( $service_host ) || '' === $service_host ) {
-			wp_die( esc_html__( 'The verified connection service host is invalid.', 'editorial-publisher-for-chatgpt' ), '', array( 'response' => 400 ) );
+		$this->send_callback_handoff( $callback );
+	}
+
+	/**
+	 * Return a browser-safe handoff document for a verified OAuth callback.
+	 *
+	 * The callback URL has already been assembled from a signed service URL and
+	 * a one-time WordPress grant. A document handoff avoids dependence on a host
+	 * preserving a cross-origin Location header while retaining the exact URL.
+	 *
+	 * @param string $callback Verified service callback URL.
+	 */
+	public static function callback_handoff_document( string $callback ): string {
+		$url        = esc_url_raw( $callback );
+		$javascript = wp_json_encode( $url, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT );
+		if ( ! is_string( $javascript ) ) {
+			$javascript = '""';
 		}
-		add_filter(
-			'allowed_redirect_hosts',
-			static function ( array $hosts ) use ( $service_host ): array {
-				$hosts[] = $service_host;
-				return array_values( array_unique( $hosts ) );
-			}
-		);
-		wp_safe_redirect( $callback );
+		return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta http-equiv="refresh" content="0;url=' . esc_attr( $url ) . '"><title>' . esc_html__( 'Returning to ChatGPT', 'editorial-publisher-for-chatgpt' ) . '</title></head><body><p>' . esc_html__( 'Returning to ChatGPT…', 'editorial-publisher-for-chatgpt' ) . ' <a href="' . esc_url( $url ) . '">' . esc_html__( 'Continue', 'editorial-publisher-for-chatgpt' ) . '</a></p><script>window.location.replace(' . $javascript . ');</script></body></html>';
+	}
+
+	/**
+	 * Send the verified callback handoff without relying on an external redirect header.
+	 *
+	 * @param string $callback Verified service callback URL.
+	 */
+	private function send_callback_handoff( string $callback ): never {
+		status_header( 200 );
+		nocache_headers();
+		header( 'Referrer-Policy: no-referrer' );
+		header( 'X-Robots-Tag: noindex, nofollow', true );
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- The handoff document escapes every dynamic value before it is returned.
+		echo self::callback_handoff_document( $callback );
 		exit;
 	}
 	/**
