@@ -10,7 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "react": "*",
+    "react": "19.2.8",
     "react-dom": "*"
   },
   "devDependencies": {
