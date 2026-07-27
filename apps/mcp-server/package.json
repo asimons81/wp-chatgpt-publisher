@@ -11,7 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/ext-apps": "*",
+    "@modelcontextprotocol/ext-apps": "1.7.5",
     "@modelcontextprotocol/sdk": "*",
     "@wp-chatgpt-publisher/contracts": "1.0.2",
     "@wp-chatgpt-publisher/tool-schemas": "1.0.2",
