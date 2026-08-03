@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "1.7.5",
-    "@modelcontextprotocol/sdk": "*",
+    "@modelcontextprotocol/sdk": "1.30.0",
     "@wp-chatgpt-publisher/contracts": "1.0.2",
     "@wp-chatgpt-publisher/tool-schemas": "1.0.2",
     "cors": "*",
