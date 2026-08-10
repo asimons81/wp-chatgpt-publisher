@@ -17,7 +17,7 @@
     "@wp-chatgpt-publisher/tool-schemas": "1.0.2",
     "cors": "*",
     "express": "*",
-    "express-rate-limit": "8.6.1",
+    "express-rate-limit": "8.6.2",
     "helmet": "*",
     "ipaddr.js": "*",
     "jose": "6.2.5",
