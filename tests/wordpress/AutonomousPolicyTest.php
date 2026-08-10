@@ -131,6 +131,7 @@ final class AutonomousPolicyTest extends TestCase {
 		self::assertNotNull( $read['policy'] );
 		self::assertTrue( $read['policy']['enabled'] );
 		self::assertMatchesRegularExpression( '/^[a-f0-9]{64}$/', (string) $read['fingerprint'] );
+		self::assertSame( $this->enabled_policy, $read['policy'] );
 	}
 
 	/** Unknown-field policies are disabled, not partially accepted. */

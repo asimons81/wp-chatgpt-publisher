@@ -1053,9 +1053,11 @@ final class WPCP_REST_Controller extends WP_REST_Controller {
 	 * Dry-run the autonomous policy surface (ADR 0006 §2).
 	 *
 	 * Runs the site-layer policy gates (kill switch first, pipeline
-	 * allowlist, version minimum), re-checks the live capability, and
-	 * returns the policy fingerprint plus plugin-derived facts. Grants
-	 * nothing and persists no side effects.
+	 * allowlist, version minimum) and returns the raw policy, the plugin's
+	 * fingerprint, and plugin-derived facts so the server can aggregate
+	 * every blocking violation in one result (AUTO-10 contract). Grants
+	 * nothing and persists no side effects; only manifest shape errors are
+	 * rejected here.
 	 *
 	 * @param WP_REST_Request $request REST request.
 	 */
@@ -1065,36 +1067,25 @@ final class WPCP_REST_Controller extends WP_REST_Controller {
 			$this->autonomous_audit( $request, WPCP_Autonomous::ACTION_VALIDATE, 'rejected', array( 'manifest' => $request['manifest'] ) );
 			return $manifest;
 		}
-		$policy = WPCP_Autonomous::read_policy();
-		$gates  = $this->autonomous_gates( $manifest, $policy, null );
-		if ( is_wp_error( $gates ) ) {
-			$this->autonomous_audit(
-				$request,
-				WPCP_Autonomous::ACTION_VALIDATE,
-				'rejected',
-				array(
-					'manifest'    => $manifest,
-					'fingerprint' => $policy['fingerprint'],
-				)
-			);
-			return $gates;
-		}
+		$policy    = WPCP_Autonomous::read_policy();
+		$violation = WPCP_Autonomous::first_gate_violation( $policy['policy'], (string) $manifest['pipelineId'], (string) $manifest['pipelineVersion'] );
 		$this->autonomous_audit(
 			$request,
 			WPCP_Autonomous::ACTION_VALIDATE,
-			'validated',
+			null === $violation ? 'validated' : 'rejected',
 			array(
 				'manifest'    => $manifest,
-				'fingerprint' => $gates['fingerprint'],
+				'fingerprint' => $policy['fingerprint'],
 			)
 		);
-		return rest_ensure_response(
-			array(
-				'valid'             => true,
-				'policyFingerprint' => $gates['fingerprint'],
-				'derivedFacts'      => $this->autonomous_derived_facts( $manifest ),
-			)
+		$response = array(
+			'policy'       => $policy['policy'],
+			'derivedFacts' => $this->autonomous_derived_facts( $manifest, $policy['fingerprint'] ),
 		);
+		if ( is_string( $policy['fingerprint'] ) ) {
+			$response['policyFingerprint'] = $policy['fingerprint'];
+		}
+		return rest_ensure_response( $response );
 	}
 	/**
 	 * Execute one autonomous manifest (ADR 0006 §2, §6).
@@ -1470,24 +1461,29 @@ final class WPCP_REST_Controller extends WP_REST_Controller {
 	 * Return the plugin-derived facts for a dry-run validate response.
 	 *
 	 * Facts are derived from the live site at call time; the manifest
-	 * claims are compared against them by the server-side validator.
+	 * claims are compared against them by the server-side validator. The
+	 * policy fingerprint is required by AutonomousDerivedFactsSchema; when
+	 * no policy is effective a zero digest is returned (the server engine
+	 * rejects the request at the site-policy gate before facts matter).
 	 *
-	 * @param array<string,mixed> $manifest Normalized manifest.
+	 * @param array<string,mixed> $manifest   Normalized manifest.
+	 * @param string|null         $fingerprint Policy fingerprint or null when disabled.
 	 * @return array<string,mixed>
 	 */
-	private function autonomous_derived_facts( array $manifest ): array {
+	private function autonomous_derived_facts( array $manifest, ?string $fingerprint ): array {
 		$content = $manifest['content'];
 		$author  = isset( $content['author'] ) ? absint( $content['author'] ) : 0;
 		$media   = isset( $content['featuredMediaId'] ) ? absint( $content['featuredMediaId'] ) : 0;
 		return array(
-			'contentStatus'   => 'draft',
-			'version'         => hash( 'sha256', get_bloginfo( 'version' ) . '|' . WPCP_VERSION ),
-			'postType'        => sanitize_key( (string) $content['postType'] ),
-			'author'          => $author ? $author : null,
-			'featuredMediaId' => $media ? $media : null,
-			'seoSupport'      => array( WPCP_SEO::adapter()->name() => true ),
-			'capability'      => current_user_can( WPCP_Autonomous::CAPABILITY ),
-			'rateCounts'      => $this->autonomous_rate_counts( $manifest ),
+			'contentStatus'     => 'draft',
+			'version'           => hash( 'sha256', get_bloginfo( 'version' ) . '|' . WPCP_VERSION ),
+			'postType'          => sanitize_key( (string) $content['postType'] ),
+			'author'            => $author ? $author : null,
+			'featuredMediaId'   => $media ? $media : null,
+			'seoSupport'        => array( WPCP_SEO::adapter()->name() => true ),
+			'capability'        => current_user_can( WPCP_Autonomous::CAPABILITY ),
+			'rateCounts'        => $this->autonomous_rate_counts( $manifest ),
+			'policyFingerprint' => is_string( $fingerprint ) ? $fingerprint : str_repeat( '0', 64 ),
 		);
 	}
 	/**
