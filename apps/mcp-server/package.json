@@ -19,7 +19,7 @@
     "express": "*",
     "express-rate-limit": "8.6.2",
     "helmet": "*",
-    "ipaddr.js": "*",
+    "ipaddr.js": "2.5.0",
     "jose": "6.2.8",
     "pg": "*",
     "pino": "*",
