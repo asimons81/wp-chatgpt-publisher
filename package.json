@@ -50,7 +50,7 @@
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",
     "@types/node": "latest",
-    "@types/pg": "8.20.0",
+    "@types/pg": "8.20.4",
     "@vitest/coverage-v8": "latest",
     "archiver": "8.0.0",
     "concurrently": "latest",
@@ -58,7 +58,7 @@
     "eslint-plugin-security": "latest",
     "globals": "latest",
     "prettier": "latest",
-    "tsx": "4.23.1",
+    "tsx": "4.23.11",
     "typescript": "latest",
     "typescript-eslint": "latest",
     "vitest": "latest"
