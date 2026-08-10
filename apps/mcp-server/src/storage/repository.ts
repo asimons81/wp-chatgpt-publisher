@@ -1,4 +1,5 @@
 import type { Connection, Scope } from "@wp-chatgpt-publisher/contracts";
+import type { AutonomousAuditOutcome, AutonomousAuditRecord } from "../autonomous/audit.js";
 
 export interface OAuthClient {
   id: string;
@@ -49,6 +50,14 @@ export interface ConfirmationRecord {
   consumedAt: string | null;
 }
 
+export interface AutonomousAuditFilter {
+  connectionId?: string;
+  pipelineId?: string;
+  outcome?: AutonomousAuditOutcome;
+  /** Newest-first cap. Defaults to 100, max 1000. */
+  limit?: number;
+}
+
 export interface Repository {
   migrate(): Promise<void>;
   ping(): Promise<void>;
@@ -77,4 +86,8 @@ export interface Repository {
   ): Promise<{ claimed: boolean; response: unknown }>;
   finishIdempotency(connectionId: string, key: string, response: unknown): Promise<void>;
   releaseIdempotency(connectionId: string, key: string): Promise<void>;
+  /** Persist a safe autonomous audit record; throws when it cannot be durable. */
+  recordAutonomousAudit(record: AutonomousAuditRecord): Promise<void>;
+  /** Query the autonomous audit trail newest-first for provenance answers. */
+  listAutonomousAudits(filter?: AutonomousAuditFilter): Promise<AutonomousAuditRecord[]>;
 }

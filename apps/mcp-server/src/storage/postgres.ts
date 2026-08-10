@@ -3,11 +3,13 @@ import { ConnectionSchema, ScopeSchema, type Connection } from "@wp-chatgpt-publ
 import type {
   AuthorizationCode,
   AuthorizationFlow,
+  AutonomousAuditFilter,
   ConfirmationRecord,
   OAuthClient,
   RefreshTokenRecord,
   Repository,
 } from "./repository.js";
+import { AutonomousAuditRecordSchema, type AutonomousAuditRecord } from "../autonomous/audit.js";
 
 function iso(value: unknown): string {
   const date = value instanceof Date ? value : new Date(String(value));
@@ -84,6 +86,21 @@ interface IdempotencyRow extends QueryResultRow {
   request_hash: string;
   response: unknown;
 }
+interface AutonomousAuditRow extends QueryResultRow {
+  id: string;
+  schema_version: number;
+  request_id: string;
+  connection_id: string;
+  client_id: string;
+  pipeline_id: string;
+  pipeline_version: string;
+  intent: string;
+  outcome: string;
+  violations: unknown;
+  policy_fingerprint: string;
+  request_hash: string;
+  created_at: unknown;
+}
 
 export class PostgresRepository implements Repository {
   readonly #pool: Pool;
@@ -125,6 +142,17 @@ export class PostgresRepository implements Repository {
         request_hash text NOT NULL, response jsonb, created_at timestamptz NOT NULL DEFAULT now(),
         PRIMARY KEY(connection_id, key)
       );
+      CREATE TABLE IF NOT EXISTS autonomous_audit (
+        id uuid PRIMARY KEY, schema_version integer NOT NULL DEFAULT 1,
+        request_id uuid NOT NULL, connection_id uuid NOT NULL REFERENCES connections(id),
+        client_id text NOT NULL, pipeline_id text NOT NULL, pipeline_version text NOT NULL,
+        intent text NOT NULL, outcome text NOT NULL, violations jsonb NOT NULL DEFAULT '[]',
+        policy_fingerprint char(64) NOT NULL, request_hash char(64) NOT NULL,
+        created_at timestamptz NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS autonomous_audit_connection_created_idx ON autonomous_audit(connection_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS autonomous_audit_pipeline_idx ON autonomous_audit(pipeline_id);
+      CREATE INDEX IF NOT EXISTS autonomous_audit_request_idx ON autonomous_audit(request_id);
       CREATE INDEX IF NOT EXISTS authorization_flows_expires_idx ON authorization_flows(expires_at);
       CREATE INDEX IF NOT EXISTS refresh_tokens_connection_idx ON refresh_tokens(connection_id);
       CREATE INDEX IF NOT EXISTS confirmations_expires_idx ON confirmations(expires_at);
@@ -402,6 +430,72 @@ export class PostgresRepository implements Repository {
     await this.#pool.query(
       "DELETE FROM idempotency WHERE connection_id=$1 AND key=$2 AND response IS NULL",
       [connectionId, key],
+    );
+  }
+  async recordAutonomousAudit(record: AutonomousAuditRecord): Promise<void> {
+    const value = AutonomousAuditRecordSchema.parse(record);
+    await this.#pool.query(
+      `INSERT INTO autonomous_audit(
+        id, schema_version, request_id, connection_id, client_id, pipeline_id, pipeline_version,
+        intent, outcome, violations, policy_fingerprint, request_hash, created_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [
+        value.id,
+        value.schemaVersion,
+        value.requestId,
+        value.connectionId,
+        value.clientId,
+        value.pipelineId,
+        value.pipelineVersion,
+        value.intent,
+        value.outcome,
+        JSON.stringify(value.violations),
+        value.policyFingerprint,
+        value.requestHash,
+        value.createdAt,
+      ],
+    );
+  }
+  async listAutonomousAudits(filter: AutonomousAuditFilter = {}): Promise<AutonomousAuditRecord[]> {
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    if (filter.connectionId) {
+      params.push(filter.connectionId);
+      clauses.push(`connection_id=$${params.length}`);
+    }
+    if (filter.pipelineId) {
+      params.push(filter.pipelineId);
+      clauses.push(`pipeline_id=$${params.length}`);
+    }
+    if (filter.outcome) {
+      params.push(filter.outcome);
+      clauses.push(`outcome=$${params.length}`);
+    }
+    const where = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+    const limit = Math.min(Math.max(filter.limit ?? 100, 1), 1000);
+    params.push(limit);
+    const result = await this.#pool.query<AutonomousAuditRow>(
+      `SELECT id, schema_version, request_id, connection_id, client_id, pipeline_id, pipeline_version,
+              intent, outcome, violations, policy_fingerprint, request_hash, created_at
+       FROM autonomous_audit ${where} ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
+      params,
+    );
+    return result.rows.map((row) =>
+      AutonomousAuditRecordSchema.parse({
+        id: row.id,
+        schemaVersion: row.schema_version,
+        requestId: row.request_id,
+        connectionId: row.connection_id,
+        clientId: row.client_id,
+        pipelineId: row.pipeline_id,
+        pipelineVersion: row.pipeline_version,
+        intent: row.intent,
+        outcome: row.outcome,
+        violations: Array.isArray(row.violations) ? row.violations : [],
+        policyFingerprint: row.policy_fingerprint,
+        requestHash: row.request_hash,
+        createdAt: iso(row.created_at),
+      }),
     );
   }
   async #transaction<T>(callback: (client: PoolClient) => Promise<T>): Promise<T> {
