@@ -21,8 +21,8 @@ import {
  *   - malformed or unknown state fails closed (rejected, never accepted).
  *
  * Policy gates evaluated, in order (every gate returns structured
- * violations; evaluation stops at the first failing gate, mirroring the
- * fail-closed list in ADR 0006 §9):
+ * violations; fail-fast evaluation stops at the first failing gate,
+ * mirroring the fail-closed list in ADR 0006 §9):
  *
  *   1. server kill switch   (AUTONOMOUS_ENABLED=false  -> autonomous_disabled)
  *   2. site policy kill     (policy disabled/missing   -> autonomous_disabled)
@@ -35,6 +35,18 @@ import {
  *   9. capability gate      (missing publish_posts     -> capability_missing)
  *  10. policy fingerprint   (changed between calls     -> policy_fingerprint_mismatch)
  *  11. rate caps            (hour/day/scheduled        -> rate_cap_exceeded)
+ *
+ * Two drivers share the same gate list:
+ *   - `validateAutonomousRequest` fails fast (first violation wins), the
+ *     execution semantics: there is no "maybe accepted" state.
+ *   - `validateAutonomousDryRun` (AUTO-10) evaluates every gate whose
+ *     prerequisites are available and collects ALL violations, so a caller
+ *     sees every current blocking condition in one result. Gates that need
+ *     a value the request failed to provide (a valid manifest, a parsed
+ *     site policy, server-derived facts) are skipped — their prerequisite
+ *     failure is already reported as a violation, and a skipped gate can
+ *     never turn a rejected request into an accepted one: dry-run returns
+ *     ok only when zero violations were found.
  *
  * Validation is intentionally conservative: a malformed site policy is
  * treated as disabled (not ignored, not defaulted open), a malformed
@@ -61,6 +73,19 @@ export interface AutonomousViolation {
   /** Optional structured detail, e.g. which layer rejected the pipeline. */
   detail?: unknown;
 }
+
+/** Every violation code the engine can produce (fail-closed set). */
+export const AUTONOMOUS_VIOLATION_CODES: ReadonlySet<string> = new Set<AutonomousViolationCode>([
+  "autonomous_disabled",
+  "pipeline_not_allowed",
+  "pipeline_version_mismatch",
+  "manifest_invalid",
+  "derived_fact_mismatch",
+  "capability_missing",
+  "policy_fingerprint_mismatch",
+  "rate_cap_exceeded",
+  "scope_missing",
+]);
 
 export interface AutonomousServerPolicyInput {
   enabled: boolean;
@@ -136,278 +161,317 @@ export function parseSitePolicy(raw: unknown): AutonomousPolicy | null {
 }
 
 /**
- * The central gate. Returns every structured violation for the input (the
- * first failing gate is authoritative and later gates are not evaluated,
- * exactly as execution would behave — no "maybe accepted" state exists).
+ * Shared evaluation state. Parsed values are cached here by the gates that
+ * produce them; gates that need a value the request failed to provide are
+ * skipped (their prerequisite violation is already in the result).
  */
-export function validateAutonomousRequest(
-  input: AutonomousValidationInput,
-): AutonomousValidationResult {
-  // 1. Server kill switch — checked before anything else.
+interface GateContext {
+  sitePolicy: AutonomousPolicy | null;
+  manifest: AutonomousManifest | null;
+  derivedFacts: AutonomousDerivedFacts | null;
+  serverDescriptor: AutonomousPipelinePolicy | null;
+  siteDescriptor: AutonomousPipelinePolicy | null;
+  fingerprint: string;
+}
+
+type Gate = (input: AutonomousValidationInput, context: GateContext) => AutonomousViolation | null;
+
+function createContext(): GateContext {
+  return {
+    sitePolicy: null,
+    manifest: null,
+    derivedFacts: null,
+    serverDescriptor: null,
+    siteDescriptor: null,
+    fingerprint: "",
+  };
+}
+
+// --- Gates (order matters: this list IS the fail-closed order) -------------
+
+const gateServerKillSwitch: Gate = (input) => {
   if (!input.serverPolicy.enabled) {
     return {
-      ok: false,
-      violations: [
-        {
-          code: "autonomous_disabled",
-          message: "Autonomous publishing is disabled on the server.",
-          detail: { layer: "server" },
-        },
-      ],
+      code: "autonomous_disabled",
+      message: "Autonomous publishing is disabled on the server.",
+      detail: { layer: "server" },
     };
   }
+  return null;
+};
 
-  // 2+3. Site policy — missing, malformed, or unknown fields all fail closed.
+const gateSitePolicy: Gate = (input, context) => {
   const sitePolicy = parseSitePolicy(input.sitePolicy.policy);
+  context.sitePolicy = sitePolicy;
   if (!sitePolicy) {
     return {
-      ok: false,
-      violations: [
-        {
-          code: "autonomous_disabled",
-          message: "Autonomous publishing is disabled: site policy is missing or malformed.",
-          detail: { layer: "site", reason: "missing_or_malformed" },
-        },
-      ],
+      code: "autonomous_disabled",
+      message: "Autonomous publishing is disabled: site policy is missing or malformed.",
+      detail: { layer: "site", reason: "missing_or_malformed" },
     };
   }
   if (!sitePolicy.enabled) {
     return {
-      ok: false,
-      violations: [
-        {
-          code: "autonomous_disabled",
-          message: "Autonomous publishing is disabled by the site policy.",
-          detail: { layer: "site", reason: "disabled" },
-        },
-      ],
+      code: "autonomous_disabled",
+      message: "Autonomous publishing is disabled by the site policy.",
+      detail: { layer: "site", reason: "disabled" },
     };
   }
+  return null;
+};
 
-  // 4. Scope gate — pipeline id is not identity; the authenticated actor and
-  // connection must hold autonomous:execute (ADR 0006 §9.2). The MCP
-  // boundary enforces this first; the validator repeats it so dry-run
-  // reports the same structured result.
+const gateScope: Gate = (input) => {
   if (input.scopes && !input.scopes.includes(AUTONOMOUS_EXECUTE_SCOPE)) {
     return {
-      ok: false,
-      violations: [
-        {
-          code: "scope_missing",
-          message: "The connection is not approved for autonomous execution.",
-          detail: { missingScope: AUTONOMOUS_EXECUTE_SCOPE },
-        },
-      ],
+      code: "scope_missing",
+      message: "The connection is not approved for autonomous execution.",
+      detail: { missingScope: AUTONOMOUS_EXECUTE_SCOPE },
     };
   }
+  return null;
+};
 
-  // 5. Manifest — strict shape, unknown fields rejected, refine enforced.
+const gateManifest: Gate = (input, context) => {
   const manifest = AutonomousManifestSchema.safeParse(input.manifest);
   if (!manifest.success) {
     return {
-      ok: false,
-      violations: [
-        {
-          code: "manifest_invalid",
-          message: "The autonomous manifest is invalid.",
-          detail: {
-            issues: manifest.error.issues.map((issue) => ({
-              path: issue.path.join("."),
-              message: issue.message,
-            })),
-          },
-        },
-      ],
+      code: "manifest_invalid",
+      message: "The autonomous manifest is invalid.",
+      detail: {
+        issues: manifest.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      },
     };
   }
-  const manifestData: AutonomousManifest = manifest.data;
+  context.manifest = manifest.data;
+  return null;
+};
 
-  // 6. Pipeline allowlist — both layers must permit the pipeline.
+const gatePipelineAllowlist: Gate = (input, context) => {
+  if (!context.manifest || !context.sitePolicy) return null;
   const serverDescriptor = input.serverPolicy.allowedPipelines.find(
-    (descriptor) => descriptor.pipelineId === manifestData.pipelineId,
+    (descriptor) => descriptor.pipelineId === context.manifest!.pipelineId,
   );
-  const siteDescriptor = sitePolicy.allowedPipelines.find(
-    (descriptor) => descriptor.pipelineId === manifestData.pipelineId,
+  const siteDescriptor = context.sitePolicy.allowedPipelines.find(
+    (descriptor) => descriptor.pipelineId === context.manifest!.pipelineId,
   );
+  context.serverDescriptor = serverDescriptor ?? null;
+  context.siteDescriptor = siteDescriptor ?? null;
   if (!serverDescriptor || !siteDescriptor) {
     const missingLayers: string[] = [];
     if (!serverDescriptor) missingLayers.push("server");
     if (!siteDescriptor) missingLayers.push("site");
     return {
-      ok: false,
-      violations: [
-        {
-          code: "pipeline_not_allowed",
-          message: `The pipeline is not allowed at the ${missingLayers.join(" and ")} layer.`,
-          detail: { pipelineId: manifestData.pipelineId, layers: missingLayers },
-        },
-      ],
+      code: "pipeline_not_allowed",
+      message: `The pipeline is not allowed at the ${missingLayers.join(" and ")} layer.`,
+      detail: { pipelineId: context.manifest.pipelineId, layers: missingLayers },
     };
   }
+  return null;
+};
 
-  // 7. Pipeline version — must satisfy the configured minimum at both layers.
+const gatePipelineVersion: Gate = (_input, context) => {
+  if (!context.manifest || !context.serverDescriptor || !context.siteDescriptor) return null;
   const versionOk =
-    versionAtLeast(manifestData.pipelineVersion, serverDescriptor.minPipelineVersion) &&
-    versionAtLeast(manifestData.pipelineVersion, siteDescriptor.minPipelineVersion);
+    versionAtLeast(context.manifest.pipelineVersion, context.serverDescriptor.minPipelineVersion) &&
+    versionAtLeast(context.manifest.pipelineVersion, context.siteDescriptor.minPipelineVersion);
   if (!versionOk) {
     return {
-      ok: false,
-      violations: [
-        {
-          code: "pipeline_version_mismatch",
-          message: "The pipeline version is below the configured minimum.",
-          detail: {
-            pipelineId: manifestData.pipelineId,
-            version: manifestData.pipelineVersion,
-            serverMinimum: serverDescriptor.minPipelineVersion,
-            siteMinimum: siteDescriptor.minPipelineVersion,
-          },
-        },
-      ],
+      code: "pipeline_version_mismatch",
+      message: "The pipeline version is below the configured minimum.",
+      detail: {
+        pipelineId: context.manifest.pipelineId,
+        version: context.manifest.pipelineVersion,
+        serverMinimum: context.serverDescriptor.minPipelineVersion,
+        siteMinimum: context.siteDescriptor.minPipelineVersion,
+      },
     };
   }
+  return null;
+};
 
-  // 8. Derived facts — server-derived current WordPress state. Malformed
-  // facts fail closed (security_rejection is not a valid autonomous code, so
-  // this surfaces as manifest_invalid-style rejection via capability/derived
-  // checks below; parse failure itself is a hard violation).
+const gateDerivedFacts: Gate = (input, context) => {
   const derived = AutonomousDerivedFactsSchema.safeParse(input.derivedFacts);
   if (!derived.success) {
     return {
-      ok: false,
-      violations: [
-        {
-          code: "derived_fact_mismatch",
-          message: "Server-derived facts are malformed; refusing to proceed.",
-          detail: {
-            issues: derived.error.issues.map((issue) => ({
-              path: issue.path.join("."),
-              message: issue.message,
-            })),
-          },
-        },
-      ],
+      code: "derived_fact_mismatch",
+      message: "Server-derived facts are malformed; refusing to proceed.",
+      detail: {
+        issues: derived.error.issues.map((issue) => ({
+          path: issue.path.join("."),
+          message: issue.message,
+        })),
+      },
     };
   }
-  const derivedFacts = derived.data;
+  context.derivedFacts = derived.data;
+  return null;
+};
 
-  // Manifest intent vs derived status. Both intents create NEW content, so a
-  // derived status of publish contradicts the manifest claim that the target
-  // does not yet exist as a live post (ADR 0006 §9.10).
-  if (derivedFacts.contentStatus === "publish") {
+const gateStatusContradiction: Gate = (_input, context) => {
+  if (!context.manifest || !context.derivedFacts) return null;
+  if (context.derivedFacts.contentStatus === "publish") {
     return {
-      ok: false,
-      violations: [
-        {
-          code: "derived_fact_mismatch",
-          message:
-            "Cannot create or schedule a draft: the derived content status is already published.",
-          detail: { intent: manifestData.intent, contentStatus: derivedFacts.contentStatus },
-        },
-      ],
+      code: "derived_fact_mismatch",
+      message:
+        "Cannot create or schedule a draft: the derived content status is already published.",
+      detail: {
+        intent: context.manifest.intent,
+        contentStatus: context.derivedFacts.contentStatus,
+      },
     };
   }
+  return null;
+};
 
-  // Author/media claims must match server facts exactly.
+const gateClaimsMatch: Gate = (_input, context) => {
+  if (!context.manifest || !context.derivedFacts) return null;
   const authorMismatch =
-    manifestData.content.author !== undefined &&
-    derivedFacts.author !== null &&
-    manifestData.content.author !== derivedFacts.author;
+    context.manifest.content.author !== undefined &&
+    context.derivedFacts.author !== null &&
+    context.manifest.content.author !== context.derivedFacts.author;
   const mediaMismatch =
-    manifestData.content.featuredMediaId !== undefined &&
-    derivedFacts.featuredMediaId !== null &&
-    manifestData.content.featuredMediaId !== derivedFacts.featuredMediaId;
-  const postTypeMismatch = manifestData.content.postType !== derivedFacts.postType;
+    context.manifest.content.featuredMediaId !== undefined &&
+    context.derivedFacts.featuredMediaId !== null &&
+    context.manifest.content.featuredMediaId !== context.derivedFacts.featuredMediaId;
+  const postTypeMismatch = context.manifest.content.postType !== context.derivedFacts.postType;
   if (authorMismatch || mediaMismatch || postTypeMismatch) {
     const conflicts: string[] = [];
     if (authorMismatch) conflicts.push("author");
     if (mediaMismatch) conflicts.push("featuredMediaId");
     if (postTypeMismatch) conflicts.push("postType");
     return {
-      ok: false,
-      violations: [
-        {
-          code: "derived_fact_mismatch",
-          message: `Server facts contradict manifest claims: ${conflicts.join(", ")}.`,
-          detail: {
-            conflicts,
-            claimedAuthor: manifestData.content.author,
-            derivedAuthor: derivedFacts.author,
-            claimedMediaId: manifestData.content.featuredMediaId,
-            derivedMediaId: derivedFacts.featuredMediaId,
-            claimedPostType: manifestData.content.postType,
-            derivedPostType: derivedFacts.postType,
-          },
-        },
-      ],
+      code: "derived_fact_mismatch",
+      message: `Server facts contradict manifest claims: ${conflicts.join(", ")}.`,
+      detail: {
+        conflicts,
+        claimedAuthor: context.manifest.content.author,
+        derivedAuthor: context.derivedFacts.author,
+        claimedMediaId: context.manifest.content.featuredMediaId,
+        derivedMediaId: context.derivedFacts.featuredMediaId,
+        claimedPostType: context.manifest.content.postType,
+        derivedPostType: context.derivedFacts.postType,
+      },
     };
   }
+  return null;
+};
 
-  // 9. Capability — the connection's WordPress user must currently hold the
-  // native capability (plugin re-checks live capabilities independently).
-  if (!derivedFacts.capability) {
+const gateCapability: Gate = (_input, context) => {
+  if (!context.derivedFacts) return null;
+  if (!context.derivedFacts.capability) {
     return {
-      ok: false,
-      violations: [
-        {
-          code: "capability_missing",
-          message: "The WordPress user lacks the capability for autonomous publishing.",
-          detail: { capability: "publish_posts" },
-        },
-      ],
+      code: "capability_missing",
+      message: "The WordPress user lacks the capability for autonomous publishing.",
+      detail: { capability: "publish_posts" },
     };
   }
+  return null;
+};
 
-  // 10. Policy fingerprint — execution must match the validated policy.
-  const fingerprint = policyFingerprint(sitePolicy);
+const gatePolicyFingerprint: Gate = (input, context) => {
+  if (!context.sitePolicy) return null;
+  context.fingerprint = policyFingerprint(context.sitePolicy);
   if (
     input.expectedPolicyFingerprint !== undefined &&
-    input.expectedPolicyFingerprint !== fingerprint
+    input.expectedPolicyFingerprint !== context.fingerprint
   ) {
     return {
-      ok: false,
-      violations: [
-        {
-          code: "policy_fingerprint_mismatch",
-          message: "The site policy changed since validation; validate again before executing.",
-          detail: {
-            expected: input.expectedPolicyFingerprint,
-            current: fingerprint,
-          },
-        },
-      ],
+      code: "policy_fingerprint_mismatch",
+      message: "The site policy changed since validation; validate again before executing.",
+      detail: {
+        expected: input.expectedPolicyFingerprint,
+        current: context.fingerprint,
+      },
     };
   }
+  return null;
+};
 
-  // 11. Rate caps — per-pipeline limits enforced from persisted counters.
-  const limits = serverDescriptor.limits;
+const gateRateCaps: Gate = (_input, context) => {
+  if (!context.manifest || !context.serverDescriptor || !context.derivedFacts) return null;
+  const limits = context.serverDescriptor.limits;
   const rateExceeded: string[] = [];
-  if (derivedFacts.rateCounts.hour >= limits.maxRequestsPerHour) rateExceeded.push("hour");
-  if (derivedFacts.rateCounts.day >= limits.maxRequestsPerDay) rateExceeded.push("day");
-  if (derivedFacts.rateCounts.scheduled >= limits.maxScheduledPerDay)
+  if (context.derivedFacts.rateCounts.hour >= limits.maxRequestsPerHour) rateExceeded.push("hour");
+  if (context.derivedFacts.rateCounts.day >= limits.maxRequestsPerDay) rateExceeded.push("day");
+  if (context.derivedFacts.rateCounts.scheduled >= limits.maxScheduledPerDay)
     rateExceeded.push("scheduled");
   if (rateExceeded.length > 0) {
     return {
-      ok: false,
-      violations: [
-        {
-          code: "rate_cap_exceeded",
-          message: `Rate cap exceeded: ${rateExceeded.join(", ")}.`,
-          detail: {
-            exceeded: rateExceeded,
-            counts: derivedFacts.rateCounts,
-            limits,
-          },
-        },
-      ],
+      code: "rate_cap_exceeded",
+      message: `Rate cap exceeded: ${rateExceeded.join(", ")}.`,
+      detail: {
+        exceeded: rateExceeded,
+        counts: context.derivedFacts.rateCounts,
+        limits,
+      },
     };
   }
+  return null;
+};
 
+const GATES: readonly Gate[] = [
+  gateServerKillSwitch,
+  gateSitePolicy,
+  gateScope,
+  gateManifest,
+  gatePipelineAllowlist,
+  gatePipelineVersion,
+  gateDerivedFacts,
+  gateStatusContradiction,
+  gateClaimsMatch,
+  gateCapability,
+  gatePolicyFingerprint,
+  gateRateCaps,
+];
+
+/**
+ * The central gate for execution. Returns the first blocking violation for
+ * the input (later gates are not evaluated after an earlier rejection —
+ * exactly the fail-closed list, no "maybe accepted" state exists).
+ */
+export function validateAutonomousRequest(
+  input: AutonomousValidationInput,
+): AutonomousValidationResult {
+  const context = createContext();
+  for (const gate of GATES) {
+    const violation = gate(input, context);
+    if (violation) return { ok: false, violations: [violation] };
+  }
   return {
     ok: true,
     violations: [],
-    fingerprint,
-    derivedFacts,
+    fingerprint: context.fingerprint,
+    derivedFacts: context.derivedFacts!,
+  };
+}
+
+/**
+ * Side-effect-free dry-run (AUTO-10). Evaluates every gate whose
+ * prerequisites are available and returns ALL current blocking violations in
+ * gate order. Gates whose prerequisite input is unavailable (invalid
+ * manifest, missing/malformed site policy, malformed derived facts) are
+ * skipped — the prerequisite failure itself is already a reported violation,
+ * and skipping can never accept a request the fail-fast path rejects:
+ * ok is returned only when zero violations were found.
+ */
+export function validateAutonomousDryRun(
+  input: AutonomousValidationInput,
+): AutonomousValidationResult {
+  const context = createContext();
+  const violations: AutonomousViolation[] = [];
+  for (const gate of GATES) {
+    const violation = gate(input, context);
+    if (violation) violations.push(violation);
+  }
+  if (violations.length > 0) return { ok: false, violations };
+  return {
+    ok: true,
+    violations: [],
+    fingerprint: context.fingerprint,
+    derivedFacts: context.derivedFacts!,
   };
 }
 

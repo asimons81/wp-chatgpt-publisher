@@ -27,6 +27,7 @@ import type { Repository } from "../storage/repository.js";
 import { WordPressClient } from "../wordpress/client.js";
 import { stableHash, uploadIdempotencyInput } from "../wordpress/payload.js";
 import { resolveConnectorFile } from "../media/connector-files.js";
+import { evaluateAutonomousDryRun } from "../autonomous/dry-run.js";
 
 const CONSEQUENTIAL_SCOPES: Record<string, Scope> = {
   publish: "publish:execute",
@@ -129,6 +130,8 @@ export class McpService {
       assertScopes(granted, definition.requiredScopes);
       if (name === "wordpress_request_confirmation")
         return this.#requestConfirmation(connection, input as Record<string, unknown>, context);
+      if (name === "wordpress_autonomous_validate")
+        return this.#autonomousValidate(connection, input as Record<string, unknown>, context);
       if (definition.risk === "consequential")
         await this.#verifyConfirmation(name, input as Record<string, unknown>, context);
       if (name === "wordpress_set_featured_image")
@@ -272,6 +275,38 @@ export class McpService {
       },
       "ui://wp-chatgpt-publisher/publish-confirmation.html",
     );
+  }
+  /**
+   * Side-effect-free autonomous eligibility validation (AUTO-10 / ADR 0008).
+   *
+   * Calls the plugin dry-run route (read-only status/version/capability
+   * checks), then evaluates every blocking violation through the shared
+   * engine. This path performs no confirmation, no idempotency claim, no
+   * audit write, and no connection touch — it mints nothing and cannot be
+   * replayed as publication authority. Execution (AUTO-06/07) always
+   * revalidates from scratch and never trusts this result.
+   */
+  async #autonomousValidate(
+    connection: NonNullable<Awaited<ReturnType<Repository["getConnection"]>>>,
+    input: Record<string, unknown>,
+    context: ToolContext,
+  ) {
+    const pluginResponse = await this.#wordpress.call(
+      connection,
+      "wordpress_autonomous_validate",
+      input,
+      context.requestId,
+    );
+    const result = evaluateAutonomousDryRun({
+      manifest: input,
+      serverPolicy: {
+        enabled: config.autonomousEnabled,
+        allowedPipelines: config.autonomousAllowedPipelines,
+      },
+      pluginResponse,
+      scopes: context.scopes,
+    });
+    return this.#result(result);
   }
   async #verifyConfirmation(
     name: ToolName,

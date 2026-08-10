@@ -540,6 +540,34 @@ export const AutonomousDerivedFactsSchema = z
   .strict();
 export type AutonomousDerivedFacts = z.infer<typeof AutonomousDerivedFactsSchema>;
 
+/**
+ * Response contract for the plugin POST /v1/autonomous/validate route
+ * (ADR 0006 §2, consumed by the server-side dry-run tool AUTO-10).
+ *
+ * The plugin performs a read-only WordPress dry-run (status/version/
+ * capability checks) and returns the site policy as read at call time plus
+ * the derived facts. The server engine is the single authority on the
+ * policy: the raw policy is re-parsed strictly and the fingerprint is
+ * recomputed server-side. `policyFingerprint` is the plugin's own
+ * computation and, when present, must match the server's recomputation —
+ * a disagreement fails closed (upstream_error) because the two layers
+ * disagree on the effective policy.
+ */
+export const AutonomousValidateResponseSchema = z
+  .object({
+    /**
+     * Raw site policy as read from the wpcp_autonomous_policy option at
+     * call time: null when absent or unparseable (treated as disabled by
+     * the engine). Never a default-open substitute for a missing policy.
+     */
+    policy: z.unknown().nullable(),
+    /** Plugin-computed SHA-256 fingerprint of the effective policy. */
+    policyFingerprint: z.string().optional(),
+    derivedFacts: AutonomousDerivedFactsSchema,
+  })
+  .strict();
+export type AutonomousValidateResponse = z.infer<typeof AutonomousValidateResponseSchema>;
+
 export function hasAllScopes(granted: readonly Scope[], required: readonly Scope[]): boolean {
   const grantSet = new Set(granted);
   return required.every((scope) => grantSet.has(scope));

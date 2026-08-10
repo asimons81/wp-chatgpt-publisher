@@ -1,10 +1,11 @@
 import type { Connection } from "@wp-chatgpt-publisher/contracts";
 import { fetch } from "undici";
 import { config } from "../config.js";
-import { AppError } from "../errors.js";
+import { AppError, type ErrorCode } from "../errors.js";
 import { SecretBox } from "../security/crypto.js";
 import { validateExternalUrl } from "../security/ssrf.js";
 import type { ResolvedConnectorUpload } from "../media/connector-files.js";
+import { AUTONOMOUS_VIOLATION_CODES } from "../autonomous/validate.js";
 import { uploadForm } from "./payload.js";
 
 const box = new SecretBox(config.encryptionKey);
@@ -30,6 +31,7 @@ const endpointMap: Record<string, { method: "GET" | "POST" | "PATCH"; path: stri
   wordpress_get_preview: { method: "POST", path: "/preview" },
   wordpress_schedule_post: { method: "POST", path: "/schedule" },
   wordpress_publish_post: { method: "POST", path: "/publish" },
+  wordpress_autonomous_validate: { method: "POST", path: "/autonomous/validate" },
 };
 
 export class WordPressClient {
@@ -87,8 +89,14 @@ export class WordPressClient {
       }
       if (!response.ok) {
         const source = typeof body === "object" && body ? (body as Record<string, unknown>) : {};
+        // The plugin rejects autonomous requests with structured WP_Error
+        // bodies carrying the ADR code (e.g. wpcp_autonomous_disabled with
+        // data.code = "autonomous_disabled"). Prefer that code so the MCP
+        // error surfaces the real violation, not a status-based guess.
+        const structured = autonomousCodeFromBody(source);
         const code =
-          response.status === 401
+          structured ??
+          (response.status === 401
             ? "connection_expired"
             : response.status === 403
               ? "capability_missing"
@@ -96,7 +104,7 @@ export class WordPressClient {
                 ? "edit_conflict"
                 : response.status === 429
                   ? "rate_limited"
-                  : "upstream_error";
+                  : "upstream_error");
         throw new AppError(
           code,
           typeof source.message === "string"
@@ -141,6 +149,29 @@ export class WordPressClient {
 interface ResolvedUploadInput {
   readonly file: ResolvedConnectorUpload;
   readonly fields: Record<string, string>;
+}
+
+/**
+ * Extract the ADR autonomous violation code from a WordPress REST error
+ * body, when present. The plugin serializes WP_Error as
+ * `{ code: "wpcp_autonomous_disabled", data: { code: "autonomous_disabled" } }`;
+ * accept either the top-level wpcp_-prefixed code or `data.code`, and return
+ * null when the body carries no autonomous code so the caller falls back to
+ * status-based mapping.
+ */
+function autonomousCodeFromBody(source: Record<string, unknown>): ErrorCode | null {
+  const candidates: string[] = [];
+  if (typeof source.code === "string") candidates.push(source.code);
+  const data = source.data;
+  if (typeof data === "object" && data !== null) {
+    const record = data as Record<string, unknown>;
+    if (typeof record.code === "string") candidates.push(record.code);
+  }
+  for (const candidate of candidates) {
+    const normalized = candidate.replace(/^wpcp_/, "");
+    if (AUTONOMOUS_VIOLATION_CODES.has(normalized)) return normalized as ErrorCode;
+  }
+  return null;
 }
 
 function resolvedUpload(input: unknown): ResolvedUploadInput | null {

@@ -1,5 +1,6 @@
 import {
   AssignTermsInputSchema,
+  AutonomousManifestSchema,
   ContentIdInputSchema,
   CreateDraftInputSchema,
   GetContentInputSchema,
@@ -237,6 +238,15 @@ export const TOOL_DEFINITIONS = [
     requiredScopes: ["publish:execute"],
     risk: "consequential",
     outputTemplate: "ui://wp-chatgpt-publisher/write-result.html",
+  },
+  {
+    name: "wordpress_autonomous_validate",
+    title: "Validate autonomous publishing eligibility",
+    description:
+      "Run the full autonomous policy and eligibility pipeline as a side-effect-free dry run (ADR 0006/0008). Returns every current blocking violation in gate order, or the policy fingerprint and server-derived facts when the request is eligible. Grants nothing, persists nothing, and never changes WordPress.",
+    inputSchema: AutonomousManifestSchema,
+    requiredScopes: ["autonomous:execute"],
+    risk: "read",
   },
 ] as const satisfies readonly ToolDefinition[];
 
