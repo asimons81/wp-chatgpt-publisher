@@ -12,7 +12,14 @@ export type ErrorCode =
   | "upstream_error"
   | "confirmation_required"
   | "confirmation_expired"
-  | "security_rejection";
+  | "security_rejection"
+  | "autonomous_disabled"
+  | "pipeline_not_allowed"
+  | "pipeline_version_mismatch"
+  | "manifest_invalid"
+  | "derived_fact_mismatch"
+  | "policy_fingerprint_mismatch"
+  | "rate_cap_exceeded";
 export class AppError extends Error {
   constructor(
     public readonly code: ErrorCode,

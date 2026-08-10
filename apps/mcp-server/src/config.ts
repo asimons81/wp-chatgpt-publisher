@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AutonomousPipelinePolicySchema } from "@wp-chatgpt-publisher/contracts";
 
 const ConfigSchema = z
   .object({
@@ -27,6 +28,9 @@ const ConfigSchema = z
       .max(10_485_760)
       .default(2_097_152),
     CONNECTOR_UPLOAD_DIRS: z.string().default("/mnt/data"),
+    AUTONOMOUS_ENABLED: z.enum(["true", "false"]).default("false"),
+    AUTONOMOUS_ALLOWED_PIPELINES: z.string().default(""), // JSON array; empty = none allowed
+    AUTONOMOUS_RATE_WINDOW_HOURS: z.coerce.number().int().min(1).max(24).default(24),
   })
   .superRefine((value, ctx) => {
     if (value.NODE_ENV === "production") {
@@ -65,6 +69,31 @@ const developmentKey = Buffer.alloc(32, 7).toString("base64");
 const publicBaseUrl = parsed.PUBLIC_BASE_URL.replace(/\/$/, "");
 const mcpResourceUrl = `${publicBaseUrl}/mcp`;
 
+// Strict JSON allowlist of pipeline descriptors. Malformed JSON or unknown
+// fields must fail closed at boot (ADR 0006 §3) — parse eagerly so a bad
+// config prevents the service from starting, never silently disabling or
+// widening the allowlist.
+let autonomousAllowedPipelines: ReturnType<typeof AutonomousPipelinePolicySchema.parse>[] = [];
+if (parsed.AUTONOMOUS_ALLOWED_PIPELINES.trim()) {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(parsed.AUTONOMOUS_ALLOWED_PIPELINES);
+  } catch {
+    throw new Error("AUTONOMOUS_ALLOWED_PIPELINES must be a JSON array of pipeline descriptors");
+  }
+  if (!Array.isArray(raw)) {
+    throw new Error("AUTONOMOUS_ALLOWED_PIPELINES must be a JSON array of pipeline descriptors");
+  }
+  autonomousAllowedPipelines = raw.map((descriptor, index) =>
+    AutonomousPipelinePolicySchema.parse(descriptor, {
+      error: (issue) =>
+        new Error(
+          `AUTONOMOUS_ALLOWED_PIPELINES[${index}] is invalid: ${issue.message}${issue.path ? ` (${issue.path.join(".")})` : ""}`,
+        ),
+    }),
+  );
+}
+
 export const config = {
   nodeEnv: parsed.NODE_ENV,
   port: parsed.PORT,
@@ -91,4 +120,7 @@ export const config = {
   connectorUploadDirs: parsed.CONNECTOR_UPLOAD_DIRS.split(",")
     .map((value) => value.trim())
     .filter(Boolean),
+  autonomousEnabled: parsed.AUTONOMOUS_ENABLED === "true",
+  autonomousAllowedPipelines,
+  autonomousRateWindowHours: parsed.AUTONOMOUS_RATE_WINDOW_HOURS,
 } as const;

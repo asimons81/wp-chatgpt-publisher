@@ -5,7 +5,10 @@ export const PRODUCT_SLUG = "wp-chatgpt-publisher";
 export const VERSION = "1.0.2";
 export const REST_NAMESPACE = "wp-chatgpt-publisher/v1";
 
-export const SCOPES = [
+// Base scopes granted by the legacy SCOPE_PROFILES. The autonomous scope is
+// intentionally excluded: no profile grants it; a site operator must approve
+// it explicitly at connection time (ADR 0006 §1).
+export const BASE_SCOPES = [
   "site:read",
   "content:read",
   "drafts:read",
@@ -21,6 +24,8 @@ export const SCOPES = [
   "publish:execute",
   "audit:read",
 ] as const;
+
+export const SCOPES = [...BASE_SCOPES, "autonomous:execute"] as const;
 
 export const ScopeSchema = z.enum(SCOPES);
 export type Scope = z.infer<typeof ScopeSchema>;
@@ -39,7 +44,7 @@ export const SCOPE_PROFILES = {
     "seo:read",
     "seo:write",
   ],
-  publisher: [...SCOPES],
+  publisher: [...BASE_SCOPES],
 } as const satisfies Record<string, readonly Scope[]>;
 
 export const ConnectionSchema = z
@@ -361,6 +366,15 @@ export const ToolErrorSchema = z
       "confirmation_required",
       "confirmation_expired",
       "security_rejection",
+      // Autonomous pipeline errors (ADR 0006 §7). All are fail-closed and
+      // non-retryable unless the upstream failure itself is transient.
+      "autonomous_disabled",
+      "pipeline_not_allowed",
+      "pipeline_version_mismatch",
+      "manifest_invalid",
+      "derived_fact_mismatch",
+      "policy_fingerprint_mismatch",
+      "rate_cap_exceeded",
     ]),
     message: z.string(),
     remediation: z.string().optional(),
@@ -390,6 +404,141 @@ export const PaginationSchema = z
     total: z.number().int().nonnegative().nullable(),
   })
   .strict();
+
+// ---------------------------------------------------------------------------
+// Autonomous editorial pipeline (ADR 0006). All schemas are strict: unknown
+// fields are rejected and the whole boundary fails closed.
+// ---------------------------------------------------------------------------
+
+export const AutonomousLimitsSchema = z
+  .object({
+    maxRequestsPerHour: z.number().int().min(1).max(1000).default(20),
+    maxRequestsPerDay: z.number().int().min(1).max(10000).default(100),
+    maxScheduledPerDay: z.number().int().min(1).max(1000).default(20),
+  })
+  .strict();
+export type AutonomousLimits = z.infer<typeof AutonomousLimitsSchema>;
+
+export const AUTONOMOUS_PIPELINE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
+
+// One allowed pipeline descriptor. Used in both the server operational
+// allowlist (AUTONOMOUS_ALLOWED_PIPELINES) and the plugin site policy
+// (wpcp_autonomous_policy.allowedPipelines).
+export const AutonomousPipelinePolicySchema = z
+  .object({
+    pipelineId: z.string().min(1).max(128).regex(AUTONOMOUS_PIPELINE_ID_PATTERN),
+    minPipelineVersion: z.string().min(1).max(64),
+    limits: AutonomousLimitsSchema,
+  })
+  .strict();
+export type AutonomousPipelinePolicy = z.infer<typeof AutonomousPipelinePolicySchema>;
+
+// Plugin site policy (WordPress option wpcp_autonomous_policy). Missing,
+// malformed, or unknown-field policies are treated as disabled by the
+// validator — the schema itself is strict so parse failure IS the disabled
+// signal. schemaVersion is pinned to 1 so a future contract bump fails
+// closed instead of being misread.
+export const AutonomousPolicySchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    enabled: z.boolean().default(false),
+    allowedPipelines: z.array(AutonomousPipelinePolicySchema).default([]),
+  })
+  .strict();
+export type AutonomousPolicy = z.infer<typeof AutonomousPolicySchema>;
+
+export const AutonomousManifestSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    pipelineId: z.string().min(1).max(128).regex(AUTONOMOUS_PIPELINE_ID_PATTERN),
+    pipelineVersion: z.string().min(1).max(64),
+    requestId: z.string().uuid(),
+    intent: z.enum(["create_draft", "schedule_draft"]),
+    content: z
+      .object({
+        postType: z
+          .string()
+          .regex(/^[a-z0-9_-]+$/)
+          .default("post"),
+        title: z.string().min(1).max(500),
+        body: z.string().max(1_000_000),
+        bodyFormat: ContentFormatSchema.default("markdown"),
+        excerpt: z.string().max(10_000).optional(),
+        slug: z
+          .string()
+          .max(200)
+          .regex(/^[a-z0-9-]*$/)
+          .optional(),
+        author: z.number().int().positive().optional(),
+        categories: z.array(z.number().int().positive()).max(100).default([]),
+        tags: z.array(z.number().int().positive()).max(100).default([]),
+        featuredMediaId: z.number().int().positive().optional(),
+        seo: SeoMetadataSchema.optional(),
+      })
+      .strict(),
+    schedule: z
+      .object({
+        publishAt: z.string().datetime({ offset: true }),
+        siteTimezone: z.string().min(1).max(100),
+      })
+      .strict()
+      .optional(),
+    attestations: z
+      .object({
+        research: z
+          .object({
+            performedAt: z.string().datetime(),
+            sourceCount: z.number().int().min(0).max(1000),
+            sources: z.array(z.string().url()).max(100).default([]),
+            model: z.string().max(200).optional(),
+          })
+          .strict(),
+        qa: z
+          .object({
+            performedAt: z.string().datetime(),
+            passed: z.boolean(),
+            checks: z.array(z.string().max(100)).max(50).default([]),
+            model: z.string().max(200).optional(),
+          })
+          .strict(),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.intent === "schedule_draft" && !value.schedule) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["schedule"],
+        message: "schedule_draft requires a schedule",
+      });
+    }
+  });
+export type AutonomousManifest = z.infer<typeof AutonomousManifestSchema>;
+
+// Server-derived current WordPress facts. Never supplied by the client; the
+// validator compares manifest claims against these and fails closed on any
+// mismatch (ADR 0006 §4).
+export const AutonomousDerivedFactsSchema = z
+  .object({
+    contentStatus: ContentStatusSchema,
+    version: z.string().min(1).max(200),
+    postType: z.string(),
+    author: z.number().int().positive().nullable(),
+    featuredMediaId: z.number().int().positive().nullable(),
+    seoSupport: z.record(z.string(), z.boolean()),
+    capability: z.boolean(),
+    rateCounts: z
+      .object({
+        hour: z.number().int().nonnegative(),
+        day: z.number().int().nonnegative(),
+        scheduled: z.number().int().nonnegative(),
+      })
+      .strict(),
+    policyFingerprint: z.string(),
+  })
+  .strict();
+export type AutonomousDerivedFacts = z.infer<typeof AutonomousDerivedFactsSchema>;
 
 export function hasAllScopes(granted: readonly Scope[], required: readonly Scope[]): boolean {
   const grantSet = new Set(granted);
