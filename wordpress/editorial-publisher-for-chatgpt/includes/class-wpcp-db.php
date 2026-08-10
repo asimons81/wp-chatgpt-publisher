@@ -11,7 +11,7 @@ defined( 'ABSPATH' ) || exit;
  * Owns the plugin database schema and scheduled retention cleanup.
  */
 final class WPCP_DB {
-	public const SCHEMA_VERSION = '1.0.0';
+	public const SCHEMA_VERSION = '1.1.0';
 
 	/**
 	 * Return a prefixed plugin table name.
@@ -46,17 +46,91 @@ final class WPCP_DB {
 			wp_unschedule_event( $timestamp, 'wpcp_daily_cleanup' ); } }
 	/** Create or upgrade plugin-owned database tables. */
 	public static function install_schema(): void {
-		global $wpdb;
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
-		$charset     = $wpdb->get_charset_collate();
+		foreach ( self::schema_statements() as $statement ) {
+			dbDelta( $statement );
+		}
+	}
+	/**
+	 * Return the dbDelta CREATE TABLE statements for the plugin schema.
+	 *
+	 * Kept separate from install_schema() so the migration surface is
+	 * unit-testable without a database. dbDelta is idempotent and compares
+	 * per-line field definitions (one field per line), so adding the
+	 * nullable autonomous audit columns here upgrades existing
+	 * installations in place (backward-compatible migration, ADR 0006 §8).
+	 *
+	 * @return array<string,string> Logical table name => CREATE TABLE statement.
+	 */
+	public static function schema_statements(): array {
+		$charset     = $GLOBALS['wpdb']->get_charset_collate();
 		$connections = self::table( 'connections' );
 		$grants      = self::table( 'grants' );
 		$audit       = self::table( 'audit' );
 		$idempotency = self::table( 'idempotency' );
-		dbDelta( "CREATE TABLE $connections (id char(36) NOT NULL, friendly_name varchar(200) NOT NULL, user_id bigint(20) unsigned NOT NULL, service_url varchar(2048) NOT NULL, client_id varchar(200) NOT NULL, token_hash char(64) NOT NULL, scopes longtext NOT NULL, created_at datetime NOT NULL, last_used_at datetime NULL, revoked_at datetime NULL, PRIMARY KEY  (id), UNIQUE KEY token_hash (token_hash), KEY user_id (user_id), KEY revoked_at (revoked_at)) $charset;" );
-		dbDelta( "CREATE TABLE $grants (grant_hash char(64) NOT NULL, flow_id char(36) NOT NULL, connection_id char(36) NOT NULL, service_url varchar(2048) NOT NULL, expires_at datetime NOT NULL, consumed_at datetime NULL, PRIMARY KEY  (grant_hash), KEY expires_at (expires_at)) $charset;" );
-		dbDelta( "CREATE TABLE $audit (id char(36) NOT NULL, connection_id char(36) NOT NULL, user_id bigint(20) unsigned NOT NULL, action varchar(100) NOT NULL, object_type varchar(50) NOT NULL, object_id bigint(20) unsigned NULL, changed_fields longtext NOT NULL, previous_revision bigint(20) unsigned NULL, new_revision bigint(20) unsigned NULL, outcome varchar(30) NOT NULL, request_id char(36) NOT NULL, previous_hash char(64) NOT NULL, event_hash char(64) NOT NULL, created_at datetime NOT NULL, PRIMARY KEY  (id), KEY connection_id (connection_id), KEY created_at (created_at), KEY object_lookup (object_type,object_id)) $charset;" );
-		dbDelta( "CREATE TABLE $idempotency (connection_id char(36) NOT NULL, idempotency_key char(36) NOT NULL, action varchar(100) NOT NULL, request_hash char(64) NOT NULL, response longtext NULL, created_at datetime NOT NULL, PRIMARY KEY  (connection_id,idempotency_key), KEY created_at (created_at)) $charset;" );
+		return array(
+			'connections' => "CREATE TABLE $connections (
+id char(36) NOT NULL,
+friendly_name varchar(200) NOT NULL,
+user_id bigint(20) unsigned NOT NULL,
+service_url varchar(2048) NOT NULL,
+client_id varchar(200) NOT NULL,
+token_hash char(64) NOT NULL,
+scopes longtext NOT NULL,
+created_at datetime NOT NULL,
+last_used_at datetime NULL,
+revoked_at datetime NULL,
+PRIMARY KEY  (id),
+UNIQUE KEY token_hash (token_hash),
+KEY user_id (user_id),
+KEY revoked_at (revoked_at)
+) $charset;",
+			'grants'      => "CREATE TABLE $grants (
+grant_hash char(64) NOT NULL,
+flow_id char(36) NOT NULL,
+connection_id char(36) NOT NULL,
+service_url varchar(2048) NOT NULL,
+expires_at datetime NOT NULL,
+consumed_at datetime NULL,
+PRIMARY KEY  (grant_hash),
+KEY expires_at (expires_at)
+) $charset;",
+			'audit'       => "CREATE TABLE $audit (
+id char(36) NOT NULL,
+connection_id char(36) NOT NULL,
+user_id bigint(20) unsigned NOT NULL,
+action varchar(100) NOT NULL,
+object_type varchar(50) NOT NULL,
+object_id bigint(20) unsigned NULL,
+changed_fields longtext NOT NULL,
+previous_revision bigint(20) unsigned NULL,
+new_revision bigint(20) unsigned NULL,
+outcome varchar(30) NOT NULL,
+request_id char(36) NOT NULL,
+previous_hash char(64) NOT NULL,
+event_hash char(64) NOT NULL,
+created_at datetime NOT NULL,
+pipeline_id varchar(128) NULL,
+pipeline_version varchar(64) NULL,
+request_hash char(64) NULL,
+policy_fingerprint char(64) NULL,
+PRIMARY KEY  (id),
+KEY connection_id (connection_id),
+KEY created_at (created_at),
+KEY object_lookup (object_type,object_id),
+KEY pipeline_lookup (pipeline_id,created_at)
+) $charset;",
+			'idempotency' => "CREATE TABLE $idempotency (
+connection_id char(36) NOT NULL,
+idempotency_key char(36) NOT NULL,
+action varchar(100) NOT NULL,
+request_hash char(64) NOT NULL,
+response longtext NULL,
+created_at datetime NOT NULL,
+PRIMARY KEY  (connection_id,idempotency_key),
+KEY created_at (created_at)
+) $charset;",
+		);
 	}
 	/** Delete expired approval grants and old idempotency records. */
 	public static function cleanup(): void {

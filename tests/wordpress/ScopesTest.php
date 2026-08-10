@@ -38,4 +38,32 @@ final class ScopesTest extends TestCase {
 	public function test_scope_sanitization_is_allowlist_based(): void {
 		self::assertSame( array( 'site:read' ), WPCP_Scopes::sanitize( array( 'site:read', 'site:read', 'code:execute' ) ) );
 	}
+
+	/** The autonomous scope joins the full allowlist (ADR 0006 §1). */
+	public function test_autonomous_scope_is_in_the_full_allowlist(): void {
+		self::assertContains( 'autonomous:execute', WPCP_Scopes::ALL );
+	}
+
+	/** No profile grants the autonomous scope; it needs explicit approval. */
+	public function test_autonomous_scope_is_in_no_profile(): void {
+		self::assertNotContains( 'autonomous:execute', WPCP_Scopes::READ_ONLY );
+		self::assertNotContains( 'autonomous:execute', WPCP_Scopes::EDITORIAL );
+		self::assertNotContains( 'autonomous:execute', WPCP_Scopes::PUBLISHER );
+	}
+
+	/** The autonomous scope maps to the publish baseline capability. */
+	public function test_autonomous_scope_capability_arm(): void {
+		self::assertSame( 'publish_posts', WPCP_Scopes::capability_for_scope( 'autonomous:execute' ) );
+	}
+
+	/** Sanitization allowlists the autonomous scope so it can be granted explicitly. */
+	public function test_autonomous_scope_sanitizes(): void {
+		self::assertSame( array( 'autonomous:execute' ), WPCP_Scopes::sanitize( array( 'autonomous:execute' ) ) );
+	}
+
+	/** Profiles are unchanged by the new scope (backward compatibility). */
+	public function test_legacy_profiles_are_unchanged(): void {
+		self::assertSame( WPCP_Scopes::BASE, WPCP_Scopes::PUBLISHER );
+		self::assertNotContains( 'publish:execute', WPCP_Scopes::EDITORIAL );
+	}
 }

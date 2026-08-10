@@ -406,8 +406,209 @@ final class WPCP_REST_Schema {
 				),
 				'idempotencyKey'    => $idempotency,
 			),
+			'autonomous_validate' => array(
+				'manifest' => self::autonomous_manifest_schema(),
+			),
+			'autonomous_execute' => array(
+				'manifest'                  => self::autonomous_manifest_schema(),
+				'expectedPolicyFingerprint' => array(
+					'type'      => 'string',
+					'required'  => true,
+					'pattern'   => '^[a-f0-9]{64}$',
+					'maxLength' => 64,
+				),
+			),
 			default => array(),
 		};
+	}
+
+	/**
+	 * Return the strict autonomous manifest argument schema.
+	 *
+	 * Mirrors AutonomousManifestSchema in packages/contracts (ADR 0006 §4):
+	 * every object level rejects unknown fields, string lengths and
+	 * patterns match the Zod contract, and the schedule_draft refine is
+	 * enforced by the controller after REST validation.
+	 *
+	 * @return array<string,mixed>
+	 */
+	private static function autonomous_manifest_schema(): array {
+		$id_list = array(
+			'type'     => 'array',
+			'items'    => array(
+				'type'    => 'integer',
+				'minimum' => 1,
+			),
+			'maxItems' => 100,
+			'default'  => array(),
+		);
+		return array(
+			'type'                 => 'object',
+			'required'             => true,
+			'additionalProperties' => false,
+			'properties'           => array(
+				'schemaVersion'   => array(
+					'type'     => 'integer',
+					'enum'     => array( 1 ),
+					'required' => true,
+				),
+				'pipelineId'      => array(
+					'type'      => 'string',
+					'required'  => true,
+					'pattern'   => '^[a-z0-9][a-z0-9._-]*$',
+					'minLength' => 1,
+					'maxLength' => 128,
+				),
+				'pipelineVersion' => array(
+					'type'      => 'string',
+					'required'  => true,
+					'minLength' => 1,
+					'maxLength' => 64,
+				),
+				'requestId'       => array(
+					'type'     => 'string',
+					'format'   => 'uuid',
+					'required' => true,
+				),
+				'intent'          => array(
+					'type'     => 'string',
+					'enum'     => array( 'create_draft', 'schedule_draft' ),
+					'required' => true,
+				),
+				'content'         => array(
+					'type'                 => 'object',
+					'required'             => true,
+					'additionalProperties' => false,
+					'properties'           => array(
+						'postType'        => array(
+							'type'    => 'string',
+							'pattern' => '^[a-z0-9_-]+$',
+							'default' => 'post',
+						),
+						'title'           => array(
+							'type'      => 'string',
+							'required'  => true,
+							'minLength' => 1,
+							'maxLength' => 500,
+						),
+						'body'            => array(
+							'type'      => 'string',
+							'required'  => true,
+							'maxLength' => 1000000,
+						),
+						'bodyFormat'      => array(
+							'type'    => 'string',
+							'enum'    => array( 'markdown', 'html', 'blocks' ),
+							'default' => 'markdown',
+						),
+						'excerpt'         => array(
+							'type'      => 'string',
+							'maxLength' => 10000,
+						),
+						'slug'            => array(
+							'type'      => 'string',
+							'pattern'   => '^[a-z0-9-]*$',
+							'maxLength' => 200,
+						),
+						'author'          => array(
+							'type'    => 'integer',
+							'minimum' => 1,
+						),
+						'categories'      => $id_list,
+						'tags'            => $id_list,
+						'featuredMediaId' => array(
+							'type'    => 'integer',
+							'minimum' => 1,
+						),
+						'seo'             => self::seo_schema(),
+					),
+				),
+				'schedule'        => array(
+					'type'                 => 'object',
+					'additionalProperties' => false,
+					'properties'           => array(
+						'publishAt'    => array(
+							'type'     => 'string',
+							'format'   => 'date-time',
+							'required' => true,
+						),
+						'siteTimezone' => array(
+							'type'      => 'string',
+							'required'  => true,
+							'minLength' => 1,
+							'maxLength' => 100,
+						),
+					),
+				),
+				'attestations'    => array(
+					'type'                 => 'object',
+					'required'             => true,
+					'additionalProperties' => false,
+					'properties'           => array(
+						'research' => array(
+							'type'                 => 'object',
+							'required'             => true,
+							'additionalProperties' => false,
+							'properties'           => array(
+								'performedAt' => array(
+									'type'     => 'string',
+									'format'   => 'date-time',
+									'required' => true,
+								),
+								'sourceCount' => array(
+									'type'     => 'integer',
+									'minimum'  => 0,
+									'maximum'  => 1000,
+									'required' => true,
+								),
+								'sources'     => array(
+									'type'     => 'array',
+									'items'    => array(
+										'type'   => 'string',
+										'format' => 'uri',
+									),
+									'maxItems' => 100,
+									'default'  => array(),
+								),
+								'model'       => array(
+									'type'      => 'string',
+									'maxLength' => 200,
+								),
+							),
+						),
+						'qa'       => array(
+							'type'                 => 'object',
+							'required'             => true,
+							'additionalProperties' => false,
+							'properties'           => array(
+								'performedAt' => array(
+									'type'     => 'string',
+									'format'   => 'date-time',
+									'required' => true,
+								),
+								'passed'      => array(
+									'type'     => 'boolean',
+									'required' => true,
+								),
+								'checks'      => array(
+									'type'     => 'array',
+									'items'    => array(
+										'type'      => 'string',
+										'maxLength' => 100,
+									),
+									'maxItems' => 50,
+									'default'  => array(),
+								),
+								'model'       => array(
+									'type'      => 'string',
+									'maxLength' => 200,
+								),
+							),
+						),
+					),
+				),
+			),
+		);
 	}
 
 	/**

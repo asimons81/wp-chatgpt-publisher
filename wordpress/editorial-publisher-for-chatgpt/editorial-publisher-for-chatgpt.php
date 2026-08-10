@@ -23,6 +23,7 @@ define( 'WPCP_URL', plugin_dir_url( __FILE__ ) );
 
 require_once WPCP_DIR . 'includes/class-wpcp-db.php';
 require_once WPCP_DIR . 'includes/class-wpcp-scopes.php';
+require_once WPCP_DIR . 'includes/class-wpcp-autonomous.php';
 require_once WPCP_DIR . 'includes/class-wpcp-auth.php';
 require_once WPCP_DIR . 'includes/class-wpcp-audit.php';
 require_once WPCP_DIR . 'includes/class-wpcp-markdown.php';

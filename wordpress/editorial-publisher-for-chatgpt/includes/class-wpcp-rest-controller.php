@@ -60,6 +60,8 @@ final class WPCP_REST_Controller extends WP_REST_Controller {
 		$this->route( '/preview', WP_REST_Server::CREATABLE, 'preview', array( 'drafts:read' ), array( 'read' ) );
 		$this->route( '/schedule', WP_REST_Server::CREATABLE, 'schedule', array( 'publish:schedule' ), array( 'publish_posts' ) );
 		$this->route( '/publish', WP_REST_Server::CREATABLE, 'publish', array( 'publish:execute' ), array( 'publish_posts' ) );
+		$this->route( '/autonomous/validate', WP_REST_Server::CREATABLE, 'autonomous_validate', array( 'autonomous:execute' ), array( 'publish_posts' ) );
+		$this->route( '/autonomous/execute', WP_REST_Server::CREATABLE, 'autonomous_execute', array( 'autonomous:execute' ), array( 'publish_posts' ) );
 	}
 	/**
 	 * Register one authenticated endpoint.
@@ -1047,6 +1049,578 @@ final class WPCP_REST_Controller extends WP_REST_Controller {
 				return $this->write_result( $request, $updated, 'publish', array( 'status' ), null );
 			}
 		); }
+	/**
+	 * Dry-run the autonomous policy surface (ADR 0006 §2).
+	 *
+	 * Runs the site-layer policy gates (kill switch first, pipeline
+	 * allowlist, version minimum), re-checks the live capability, and
+	 * returns the policy fingerprint plus plugin-derived facts. Grants
+	 * nothing and persists no side effects.
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 */
+	public function autonomous_validate( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+		$manifest = $this->autonomous_manifest( $request );
+		if ( is_wp_error( $manifest ) ) {
+			$this->autonomous_audit( $request, WPCP_Autonomous::ACTION_VALIDATE, 'rejected', array( 'manifest' => $request['manifest'] ) );
+			return $manifest;
+		}
+		$policy = WPCP_Autonomous::read_policy();
+		$gates  = $this->autonomous_gates( $manifest, $policy, null );
+		if ( is_wp_error( $gates ) ) {
+			$this->autonomous_audit(
+				$request,
+				WPCP_Autonomous::ACTION_VALIDATE,
+				'rejected',
+				array(
+					'manifest'    => $manifest,
+					'fingerprint' => $policy['fingerprint'],
+				)
+			);
+			return $gates;
+		}
+		$this->autonomous_audit(
+			$request,
+			WPCP_Autonomous::ACTION_VALIDATE,
+			'validated',
+			array(
+				'manifest'    => $manifest,
+				'fingerprint' => $gates['fingerprint'],
+			)
+		);
+		return rest_ensure_response(
+			array(
+				'valid'             => true,
+				'policyFingerprint' => $gates['fingerprint'],
+				'derivedFacts'      => $this->autonomous_derived_facts( $manifest ),
+			)
+		);
+	}
+	/**
+	 * Execute one autonomous manifest (ADR 0006 §2, §6).
+	 *
+	 * Gate order, all fail-closed: site policy kill switch → pipeline
+	 * allowlist + version → live capability → plugin-side rate cross-check →
+	 * idempotency reservation → mutation (draft or future schedule). The
+	 * reservation and every failed attempt are durable before any mutation;
+	 * a concurrent or repeated requestId gets 409 semantics or a replay.
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 */
+	public function autonomous_execute( WP_REST_Request $request ): WP_REST_Response|WP_Error {
+		$manifest = $this->autonomous_manifest( $request );
+		if ( is_wp_error( $manifest ) ) {
+			$this->autonomous_audit( $request, WPCP_Autonomous::ACTION_EXECUTE, 'rejected', array( 'manifest' => $request['manifest'] ) );
+			return $manifest;
+		}
+		$policy = WPCP_Autonomous::read_policy();
+		$gates  = $this->autonomous_gates( $manifest, $policy, (string) $request['expectedPolicyFingerprint'] );
+		if ( is_wp_error( $gates ) ) {
+			$this->autonomous_audit(
+				$request,
+				WPCP_Autonomous::ACTION_EXECUTE,
+				'rejected',
+				array(
+					'manifest'    => $manifest,
+					'fingerprint' => $policy['fingerprint'],
+				)
+			);
+			return $gates;
+		}
+		if ( ! current_user_can( WPCP_Autonomous::CAPABILITY ) ) {
+			$error = $this->autonomous_error( 'capability_missing', __( 'The connected WordPress user no longer has the capability for autonomous publishing.', 'editorial-publisher-for-chatgpt' ), 403 );
+			$this->autonomous_audit(
+				$request,
+				WPCP_Autonomous::ACTION_EXECUTE,
+				'rejected',
+				array(
+					'manifest'    => $manifest,
+					'fingerprint' => $gates['fingerprint'],
+				)
+			);
+			return $error;
+		}
+		$rate = $this->autonomous_rate_check( $manifest, $gates['descriptor'] );
+		if ( is_wp_error( $rate ) ) {
+			$this->autonomous_audit(
+				$request,
+				WPCP_Autonomous::ACTION_EXECUTE,
+				'rejected',
+				array(
+					'manifest'    => $manifest,
+					'fingerprint' => $gates['fingerprint'],
+				)
+			);
+			return $rate;
+		}
+		$reservation = $this->autonomous_reserve( $request, $manifest, $gates['fingerprint'] );
+		if ( is_wp_error( $reservation ) ) {
+			$this->autonomous_audit(
+				$request,
+				WPCP_Autonomous::ACTION_EXECUTE,
+				'rejected',
+				array(
+					'manifest'    => $manifest,
+					'fingerprint' => $gates['fingerprint'],
+				)
+			);
+			return $reservation;
+		}
+		if ( is_array( $reservation ) ) {
+			return rest_ensure_response( $reservation );
+		}
+		$result = $this->autonomous_create( $request, $manifest, $gates['fingerprint'] );
+		if ( is_wp_error( $result ) ) {
+			$this->autonomous_release( $request, (string) $manifest['requestId'] );
+			$this->autonomous_audit(
+				$request,
+				WPCP_Autonomous::ACTION_EXECUTE,
+				'failed',
+				array(
+					'manifest'    => $manifest,
+					'fingerprint' => $gates['fingerprint'],
+				)
+			);
+			return $result;
+		}
+		$data = $result->get_data();
+		$this->autonomous_store_response( $request, (string) $manifest['requestId'], $data );
+		return rest_ensure_response( $data );
+	}
+	/**
+	 * Extract and normalize the manifest from a validated REST request.
+	 *
+	 * @param WP_REST_Request $request REST request.
+	 * @return array<string,mixed>|WP_Error
+	 */
+	private function autonomous_manifest( WP_REST_Request $request ) {
+		$manifest = $request['manifest'];
+		if ( ! is_array( $manifest ) ) {
+			return $this->autonomous_error( 'manifest_invalid', __( 'The autonomous manifest is required.', 'editorial-publisher-for-chatgpt' ), 400 );
+		}
+		return WPCP_Autonomous::normalize_manifest( $manifest );
+	}
+	/**
+	 * Evaluate the site-layer policy gates for one manifest.
+	 *
+	 * The kill switch is checked first on every call (ADR 0006 §9.1/§9.7);
+	 * execution additionally requires the expectedPolicyFingerprint to match
+	 * the policy read at call time (ADR 0006 §3).
+	 *
+	 * @param array<string,mixed> $manifest             Normalized manifest.
+	 * @param array<string,mixed> $policy               Policy read result from WPCP_Autonomous::read_policy().
+	 * @param string|null         $expected_fingerprint Expected policy fingerprint (execute only).
+	 * @return array<string,mixed>|WP_Error
+	 */
+	private function autonomous_gates( array $manifest, array $policy, ?string $expected_fingerprint ) {
+		$violation = WPCP_Autonomous::first_gate_violation( $policy['policy'], (string) $manifest['pipelineId'], (string) $manifest['pipelineVersion'] );
+		if ( null !== $violation ) {
+			$status = 'pipeline_version_mismatch' === $violation ? 409 : 403;
+			return $this->autonomous_error( $violation, $this->autonomous_message( $violation ), $status );
+		}
+		$descriptor = WPCP_Autonomous::find_pipeline( $policy['policy'], (string) $manifest['pipelineId'] );
+		if ( null === $descriptor ) {
+			return $this->autonomous_error( 'pipeline_not_allowed', $this->autonomous_message( 'pipeline_not_allowed' ), 403 );
+		}
+		$fingerprint = (string) $policy['fingerprint'];
+		if ( null !== $expected_fingerprint && ! hash_equals( $expected_fingerprint, $fingerprint ) ) {
+			return $this->autonomous_error(
+				'policy_fingerprint_mismatch',
+				__( 'The site policy changed since validation; validate again before executing.', 'editorial-publisher-for-chatgpt' ),
+				409,
+				array(
+					'expected' => $expected_fingerprint,
+					'current'  => $fingerprint,
+				)
+			);
+		}
+		return array(
+			'fingerprint' => $fingerprint,
+			'descriptor'  => $descriptor,
+		);
+	}
+	/**
+	 * Build a fail-closed autonomous WP_Error.
+	 *
+	 * The error code is the ADR 0006 §7 code; the REST error code keeps the
+	 * plugin's wpcp_ prefix convention.
+	 *
+	 * @param string              $code    ADR violation code.
+	 * @param string              $message Human-readable message.
+	 * @param int                 $status  HTTP status.
+	 * @param array<string,mixed> $detail  Extra structured detail.
+	 */
+	private function autonomous_error( string $code, string $message, int $status, array $detail = array() ): WP_Error {
+		return new WP_Error(
+			'wpcp_' . $code,
+			$message,
+			array_merge(
+				array(
+					'status' => $status,
+					'code'   => $code,
+				),
+				$detail
+			)
+		);
+	}
+	/**
+	 * Return the operator-facing message for an ADR violation code.
+	 *
+	 * @param string $code ADR violation code.
+	 */
+	private function autonomous_message( string $code ): string {
+		return match ( $code ) {
+			'autonomous_disabled' => __( 'Autonomous publishing is disabled by the site policy.', 'editorial-publisher-for-chatgpt' ),
+			'pipeline_not_allowed' => __( 'The pipeline is not allowed by the site policy.', 'editorial-publisher-for-chatgpt' ),
+			'pipeline_version_mismatch' => __( 'The pipeline version is below the configured minimum.', 'editorial-publisher-for-chatgpt' ),
+			'capability_missing' => __( 'The connected WordPress user lacks the capability for autonomous publishing.', 'editorial-publisher-for-chatgpt' ),
+			'rate_cap_exceeded' => __( 'The autonomous rate cap for this pipeline is exceeded.', 'editorial-publisher-for-chatgpt' ),
+			'security_rejection' => __( 'The autonomous request could not be authorized safely.', 'editorial-publisher-for-chatgpt' ),
+			default => __( 'The autonomous request was rejected.', 'editorial-publisher-for-chatgpt' ),
+		};
+	}
+	/**
+	 * Write a durable autonomous audit record (best-effort for rejects).
+	 *
+	 * Only allowlisted fields reach the chain; manifest bodies and free
+	 * text never do. Returns the audit event id, or null when the audit
+	 * machinery is unavailable so the consequential path can refuse to
+	 * proceed.
+	 *
+	 * @param WP_REST_Request     $request  REST request.
+	 * @param string              $action   Audit action.
+	 * @param string              $outcome  validated|rejected|succeeded|failed.
+	 * @param array<string,mixed> $context  Optional manifest/fingerprint context.
+	 */
+	private function autonomous_audit( WP_REST_Request $request, string $action, string $outcome, array $context = array() ): ?string {
+		$autonomous = array();
+		$manifest   = isset( $context['manifest'] ) && is_array( $context['manifest'] ) ? $context['manifest'] : null;
+		if ( $manifest ) {
+			$autonomous['pipeline_id']      = isset( $manifest['pipelineId'] ) && is_string( $manifest['pipelineId'] ) ? $manifest['pipelineId'] : '';
+			$autonomous['pipeline_version'] = isset( $manifest['pipelineVersion'] ) && is_string( $manifest['pipelineVersion'] ) ? $manifest['pipelineVersion'] : '';
+		}
+		if ( ! empty( $context['fingerprint'] ) && is_string( $context['fingerprint'] ) ) {
+			$autonomous['policy_fingerprint'] = $context['fingerprint'];
+		}
+		if ( $manifest && ! empty( $context['fingerprint'] ) && is_string( $context['fingerprint'] ) ) {
+			$autonomous['request_hash'] = WPCP_Autonomous::request_hash( $manifest, (string) WPCP_Auth::connection( $request )['id'], $context['fingerprint'] );
+		} elseif ( ! empty( $context['request_hash'] ) && is_string( $context['request_hash'] ) ) {
+			$autonomous['request_hash'] = $context['request_hash'];
+		}
+		try {
+			return WPCP_Audit::record(
+				WPCP_Auth::connection( $request ),
+				$action,
+				'autonomous',
+				isset( $context['object_id'] ) ? absint( $context['object_id'] ) : null,
+				array(),
+				null,
+				null,
+				$outcome,
+				WPCP_Audit::request_id( $request ),
+				$autonomous
+			);
+		} catch ( RuntimeException $exception ) {
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log -- A failed audit must never be silent.
+			error_log( 'wpcp autonomous audit failed: ' . $exception->getMessage() );
+			return null;
+		}
+	}
+	/**
+	 * Reserve the autonomous requestId before any mutation.
+	 *
+	 * INSERT IGNORE keyed connection + requestId with a request_hash
+	 * conflict check (ADR 0006 §6): a repeated requestId with identical
+	 * input replays the cached response, with different input gets 409, and
+	 * an in-flight identical request gets 409 in-progress semantics.
+	 *
+	 * @param WP_REST_Request     $request    REST request.
+	 * @param array<string,mixed> $manifest   Normalized manifest.
+	 * @param string              $fingerprint Policy fingerprint.
+	 * @return true|array<string,mixed>|WP_Error
+	 */
+	private function autonomous_reserve( WP_REST_Request $request, array $manifest, string $fingerprint ) {
+		$connection_id = (string) WPCP_Auth::connection( $request )['id'];
+		$key           = (string) $manifest['requestId'];
+		$request_hash  = WPCP_Autonomous::request_hash( $manifest, $connection_id, $fingerprint );
+		global $wpdb;
+		$table    = WPCP_DB::table( 'idempotency' );
+		$inserted = $wpdb->query( $wpdb->prepare( 'INSERT IGNORE INTO %i (connection_id,idempotency_key,action,request_hash,response,created_at) VALUES (%s,%s,%s,%s,NULL,%s)', $table, $connection_id, $key, WPCP_Autonomous::ACTION_EXECUTE, $request_hash, current_time( 'mysql', true ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Atomic reservation in a plugin-owned idempotency table.
+		if ( false === $inserted ) {
+			return $this->autonomous_error( 'security_rejection', __( 'The request could not reserve an idempotency key.', 'editorial-publisher-for-chatgpt' ), 500 );
+		}
+		if ( 0 === $inserted ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Replay checks require current plugin-owned idempotency state.
+			$existing = $wpdb->get_row( $wpdb->prepare( 'SELECT action,request_hash,response FROM %i WHERE connection_id = %s AND idempotency_key = %s', $table, $connection_id, $key ), ARRAY_A );
+			if ( ! $existing || WPCP_Autonomous::ACTION_EXECUTE !== $existing['action'] || ! hash_equals( (string) $existing['request_hash'], $request_hash ) ) {
+				return new WP_Error( 'wpcp_idempotency_reuse', __( 'The request id was already used with different input.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 409 ) );
+			}
+			if ( $existing['response'] ) {
+				$cached = json_decode( (string) $existing['response'], true );
+				return is_array( $cached ) ? $cached : new WP_Error( 'wpcp_request_in_progress', __( 'An identical autonomous request is still in progress.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 409 ) );
+			}
+			return new WP_Error( 'wpcp_request_in_progress', __( 'An identical autonomous request is still in progress.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 409 ) );
+		}
+		return true;
+	}
+	/**
+	 * Release a failed autonomous reservation so the requestId is retryable.
+	 *
+	 * @param WP_REST_Request $request    REST request.
+	 * @param string          $request_id Manifest requestId.
+	 */
+	private function autonomous_release( WP_REST_Request $request, string $request_id ): void {
+		global $wpdb;
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Releases a failed reservation in the plugin-owned idempotency table.
+		$wpdb->delete(
+			WPCP_DB::table( 'idempotency' ),
+			array(
+				'connection_id'   => (string) WPCP_Auth::connection( $request )['id'],
+				'idempotency_key' => $request_id,
+			),
+			array( '%s', '%s' )
+		);
+	}
+	/**
+	 * Persist the executed response so a replay returns the same result.
+	 *
+	 * @param WP_REST_Request     $request    REST request.
+	 * @param string              $request_id Manifest requestId.
+	 * @param array<string,mixed> $data       Response data.
+	 */
+	private function autonomous_store_response( WP_REST_Request $request, string $request_id, array $data ): void {
+		global $wpdb;
+		$encoded = wp_json_encode( $data );
+		if ( false === $encoded ) {
+			return;
+		}
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Persists the replay response in the plugin-owned idempotency table.
+		$wpdb->update(
+			WPCP_DB::table( 'idempotency' ),
+			array( 'response' => $encoded ),
+			array(
+				'connection_id'   => (string) WPCP_Auth::connection( $request )['id'],
+				'idempotency_key' => $request_id,
+			),
+			array( '%s' ),
+			array( '%s', '%s' )
+		);
+	}
+	/**
+	 * Cross-check the plugin-side rate caps from the audit chain.
+	 *
+	 * Counts accepted autonomous executions per pipeline from the tamper-
+	 * evident audit trail within the rolling hour/day windows and future-
+	 * scheduled posts created autonomously within the day, then compares
+	 * against the site policy limits (ADR 0006 §6). Only ever rejects more
+	 * than the server layer, never less.
+	 *
+	 * @param array<string,mixed> $manifest   Normalized manifest.
+	 * @param array<string,mixed> $descriptor Site policy descriptor for the pipeline.
+	 * @return WP_Error|null
+	 */
+	private function autonomous_rate_check( array $manifest, array $descriptor ): ?WP_Error {
+		$counts   = $this->autonomous_rate_counts( $manifest );
+		$limits   = is_array( $descriptor['limits'] ?? null ) ? $descriptor['limits'] : array();
+		$exceeded = array();
+		if ( $counts['hour'] >= (int) ( $limits['maxRequestsPerHour'] ?? PHP_INT_MAX ) ) {
+			$exceeded[] = 'hour';
+		}
+		if ( $counts['day'] >= (int) ( $limits['maxRequestsPerDay'] ?? PHP_INT_MAX ) ) {
+			$exceeded[] = 'day';
+		}
+		if ( $counts['scheduled'] >= (int) ( $limits['maxScheduledPerDay'] ?? PHP_INT_MAX ) ) {
+			$exceeded[] = 'scheduled';
+		}
+		if ( $exceeded ) {
+			return $this->autonomous_error(
+				'rate_cap_exceeded',
+				$this->autonomous_message( 'rate_cap_exceeded' ),
+				429,
+				array(
+					'exceeded' => $exceeded,
+					'counts'   => $counts,
+					'limits'   => $limits,
+				)
+			);
+		}
+		return null;
+	}
+	/**
+	 * Count accepted autonomous executions from the audit chain.
+	 *
+	 * @param array<string,mixed> $manifest Normalized manifest.
+	 * @return array{hour:int,day:int,scheduled:int}
+	 */
+	private function autonomous_rate_counts( array $manifest ): array {
+		global $wpdb;
+		$table     = WPCP_DB::table( 'audit' );
+		$posts     = $wpdb->posts;
+		$pipeline  = (string) $manifest['pipelineId'];
+		$hour      = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE action = %s AND outcome = %s AND pipeline_id = %s AND created_at > %s', $table, WPCP_Autonomous::ACTION_EXECUTE, 'succeeded', $pipeline, gmdate( 'Y-m-d H:i:s', time() - HOUR_IN_SECONDS ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Rate cross-check reads the plugin-owned audit chain.
+		$day       = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i WHERE action = %s AND outcome = %s AND pipeline_id = %s AND created_at > %s', $table, WPCP_Autonomous::ACTION_EXECUTE, 'succeeded', $pipeline, gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS ) ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Rate cross-check reads the plugin-owned audit chain.
+		$scheduled = (int) $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %i a INNER JOIN %i p ON p.ID = a.object_id WHERE a.action = %s AND a.outcome = %s AND a.pipeline_id = %s AND a.created_at > %s AND p.post_status = %s', $table, $posts, WPCP_Autonomous::ACTION_EXECUTE, 'succeeded', $pipeline, gmdate( 'Y-m-d H:i:s', time() - DAY_IN_SECONDS ), 'future' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching -- Rate cross-check reads the plugin-owned audit chain and post state.
+		return array(
+			'hour'      => $hour,
+			'day'       => $day,
+			'scheduled' => $scheduled,
+		);
+	}
+	/**
+	 * Return the plugin-derived facts for a dry-run validate response.
+	 *
+	 * Facts are derived from the live site at call time; the manifest
+	 * claims are compared against them by the server-side validator.
+	 *
+	 * @param array<string,mixed> $manifest Normalized manifest.
+	 * @return array<string,mixed>
+	 */
+	private function autonomous_derived_facts( array $manifest ): array {
+		$content = $manifest['content'];
+		$author  = isset( $content['author'] ) ? absint( $content['author'] ) : 0;
+		$media   = isset( $content['featuredMediaId'] ) ? absint( $content['featuredMediaId'] ) : 0;
+		return array(
+			'contentStatus'   => 'draft',
+			'version'         => hash( 'sha256', get_bloginfo( 'version' ) . '|' . WPCP_VERSION ),
+			'postType'        => sanitize_key( (string) $content['postType'] ),
+			'author'          => $author ? $author : null,
+			'featuredMediaId' => $media ? $media : null,
+			'seoSupport'      => array( WPCP_SEO::adapter()->name() => true ),
+			'capability'      => current_user_can( WPCP_Autonomous::CAPABILITY ),
+			'rateCounts'      => $this->autonomous_rate_counts( $manifest ),
+		);
+	}
+	/**
+	 * Create the draft or future-scheduled post for one manifest.
+	 *
+	 * Creates a draft (create_draft) or a future-scheduled post
+	 * (schedule_draft). Never publishes to a live state (ADR 0006 §10).
+	 * The success audit record is written here, before the response is
+	 * returned.
+	 *
+	 * @param WP_REST_Request     $request    REST request.
+	 * @param array<string,mixed> $manifest   Normalized manifest.
+	 * @param string              $fingerprint Policy fingerprint.
+	 * @return WP_REST_Response|WP_Error
+	 */
+	private function autonomous_create( WP_REST_Request $request, array $manifest, string $fingerprint ) {
+		$content   = $manifest['content'];
+		$post_type = sanitize_key( (string) $content['postType'] );
+		if ( ! in_array( $post_type, $this->allowed_post_types( array( $post_type ) ), true ) ) {
+			return $this->autonomous_error( 'derived_fact_mismatch', __( 'The claimed post type is not supported for autonomous drafting.', 'editorial-publisher-for-chatgpt' ), 409, array( 'conflicts' => array( 'postType' ) ) );
+		}
+		$user_id = get_current_user_id();
+		$author  = isset( $content['author'] ) ? absint( $content['author'] ) : $user_id;
+		if ( isset( $content['author'] ) ) {
+			if ( ! get_user_by( 'id', $author ) ) {
+				return $this->autonomous_error( 'derived_fact_mismatch', __( 'The claimed author does not exist.', 'editorial-publisher-for-chatgpt' ), 409, array( 'conflicts' => array( 'author' ) ) );
+			}
+			if ( $author !== $user_id && ! current_user_can( 'edit_others_posts' ) ) {
+				return $this->autonomous_error( 'capability_missing', __( 'The connected user cannot assign content to another author.', 'editorial-publisher-for-chatgpt' ), 403 );
+			}
+		}
+		$media = isset( $content['featuredMediaId'] ) ? absint( $content['featuredMediaId'] ) : 0;
+		if ( $media && ! wp_attachment_is_image( $media ) ) {
+			return $this->autonomous_error( 'derived_fact_mismatch', __( 'The claimed featured media is not an image attachment.', 'editorial-publisher-for-chatgpt' ), 409, array( 'conflicts' => array( 'featuredMediaId' ) ) );
+		}
+		$status    = 'draft';
+		$timestamp = 0;
+		if ( 'schedule_draft' === $manifest['intent'] ) {
+			$schedule = $manifest['schedule'];
+			if ( wp_timezone_string() !== (string) $schedule['siteTimezone'] ) {
+				return $this->autonomous_error(
+					'derived_fact_mismatch',
+					__( 'The supplied site timezone does not match the current WordPress timezone.', 'editorial-publisher-for-chatgpt' ),
+					409,
+					array(
+						'conflicts'    => array( 'siteTimezone' ),
+						'siteTimezone' => wp_timezone_string(),
+					)
+				);
+			}
+			$timestamp = strtotime( (string) $schedule['publishAt'] );
+			if ( false === $timestamp || time() + 60 >= $timestamp ) {
+				return $this->autonomous_error( 'manifest_invalid', __( 'The scheduled time must be at least one minute in the future.', 'editorial-publisher-for-chatgpt' ), 400 );
+			}
+			$status = 'future';
+		}
+		$format  = sanitize_key( (string) $content['bodyFormat'] );
+		$body    = 'markdown' === $format ? WPCP_Markdown::to_blocks( (string) $content['body'] ) : wp_kses_post( (string) $content['body'] );
+		$post_id = wp_insert_post(
+			array(
+				'post_type'     => $post_type,
+				'post_status'   => $status,
+				'post_title'    => sanitize_text_field( (string) $content['title'] ),
+				'post_content'  => $body,
+				'post_excerpt'  => sanitize_textarea_field( isset( $content['excerpt'] ) ? (string) $content['excerpt'] : '' ),
+				'post_name'     => sanitize_title( isset( $content['slug'] ) ? (string) $content['slug'] : '' ),
+				'post_author'   => $author,
+				'edit_date'     => $timestamp ? true : false,
+				'post_date_gmt' => $timestamp ? gmdate( 'Y-m-d H:i:s', $timestamp ) : null,
+			),
+			true
+		);
+		if ( is_wp_error( $post_id ) ) {
+			return $post_id;
+		}
+		$changed = array( 'title', 'content', 'status' );
+		if ( ! empty( $content['categories'] ) ) {
+			wp_set_post_categories( $post_id, array_map( 'absint', $content['categories'] ), false );
+			$changed[] = 'categories';
+		}
+		if ( ! empty( $content['tags'] ) ) {
+			wp_set_post_tags( $post_id, array_map( 'absint', $content['tags'] ), false );
+			$changed[] = 'tags';
+		}
+		if ( $media ) {
+			set_post_thumbnail( $post_id, $media );
+			$changed[] = 'featuredMediaId';
+		}
+		$warnings = array();
+		if ( isset( $content['seo'] ) && is_array( $content['seo'] ) ) {
+			$seo      = WPCP_SEO::adapter()->set( $post_id, $content['seo'] );
+			$changed  = array_merge( $changed, array_map( static fn( string $field ): string => 'seo.' . $field, $seo['changed_fields'] ) );
+			$warnings = $seo['warnings'];
+		}
+		$post = get_post( $post_id );
+		if ( ! $post instanceof WP_Post ) {
+			return new WP_Error( 'wpcp_update_failed', __( 'WordPress could not reload the created content.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 500 ) );
+		}
+		$revision_id = $this->latest_revision_id( $post_id );
+		$audit_id    = $this->autonomous_audit(
+			$request,
+			WPCP_Autonomous::ACTION_EXECUTE,
+			'succeeded',
+			array(
+				'manifest'    => $manifest,
+				'fingerprint' => $fingerprint,
+				'object_id'   => $post_id,
+			)
+		);
+		$response    = array(
+			'object'            => array(
+				'type' => $post->post_type,
+				'id'   => $post->ID,
+			),
+			'changedFields'     => array_values( array_unique( $changed ) ),
+			'status'            => $post->post_status,
+			'version'           => $this->version( $post ),
+			'revisionId'        => $revision_id ? $revision_id : null,
+			'warnings'          => $warnings,
+			'auditEventId'      => $audit_id,
+			'policyFingerprint' => $fingerprint,
+			'requestId'         => (string) $manifest['requestId'],
+			'previewUrl'        => get_preview_post_link( $post ),
+			'editUrl'           => get_edit_post_link( $post_id, 'raw' ),
+			'publicUrl'         => null,
+		);
+		if ( $timestamp ) {
+			$response['scheduledAtUtc']  = gmdate( DATE_ATOM, $timestamp );
+			$response['scheduledAtSite'] = wp_date( DATE_ATOM, $timestamp, wp_timezone() );
+			$response['siteTimezone']    = wp_timezone_string();
+		}
+		return rest_ensure_response( $response );
+	}
 	/**
 	 * Build a consistent write result and audit event.
 	 *

@@ -11,10 +11,18 @@ defined( 'ABSPATH' ) || exit;
  * Defines the stable connection scopes and capability intersection policy.
  */
 final class WPCP_Scopes {
-	public const ALL       = array( 'site:read', 'content:read', 'drafts:read', 'drafts:write', 'media:read', 'media:write', 'taxonomy:read', 'taxonomy:write', 'seo:read', 'seo:write', 'published:edit', 'publish:schedule', 'publish:execute', 'audit:read' );
+	/**
+	 * Base scopes granted by the legacy profiles. The autonomous scope is
+	 * intentionally excluded: no profile grants it; a site operator must
+	 * approve it explicitly at connection time (ADR 0006 §1).
+	 *
+	 * @var list<string>
+	 */
+	public const BASE      = array( 'site:read', 'content:read', 'drafts:read', 'drafts:write', 'media:read', 'media:write', 'taxonomy:read', 'taxonomy:write', 'seo:read', 'seo:write', 'published:edit', 'publish:schedule', 'publish:execute', 'audit:read' );
+	public const ALL       = array( 'site:read', 'content:read', 'drafts:read', 'drafts:write', 'media:read', 'media:write', 'taxonomy:read', 'taxonomy:write', 'seo:read', 'seo:write', 'published:edit', 'publish:schedule', 'publish:execute', 'audit:read', 'autonomous:execute' );
 	public const READ_ONLY = array( 'site:read', 'content:read', 'drafts:read', 'media:read', 'taxonomy:read', 'seo:read' );
 	public const EDITORIAL = array( 'site:read', 'content:read', 'drafts:read', 'drafts:write', 'media:read', 'media:write', 'taxonomy:read', 'taxonomy:write', 'seo:read', 'seo:write' );
-	public const PUBLISHER = self::ALL;
+	public const PUBLISHER = self::BASE;
 	/**
 	 * Sanitize and allowlist a scope collection.
 	 *
@@ -46,6 +54,7 @@ final class WPCP_Scopes {
 			'taxonomy:write' => 'edit_categories',
 			'published:edit' => 'edit_published_posts',
 			'publish:schedule', 'publish:execute' => 'publish_posts',
+			'autonomous:execute' => 'publish_posts',
 			default => 'do_not_allow',
 		};
 	}
