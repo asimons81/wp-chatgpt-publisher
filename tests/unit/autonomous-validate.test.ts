@@ -269,6 +269,63 @@ describe("policyFingerprint determinism", () => {
   it("canonicalJson sorts keys recursively", () => {
     expect(canonicalJson({ b: 1, a: { d: 2, c: 3 } })).toBe('{"a":{"c":3,"d":2},"b":1}');
   });
+
+  it("canonicalJson leaves slashes and non-ASCII unescaped like the PHP plugin", () => {
+    // AUTO-11 review finding 2: the PHP canonical_json() must match
+    // JSON.stringify byte-for-byte, including "/" and non-ASCII values.
+    expect(canonicalJson({ minPipelineVersion: "1.0/2" })).toBe('{"minPipelineVersion":"1.0/2"}');
+    expect(canonicalJson({ minPipelineVersion: "v1.0-β" })).toBe('{"minPipelineVersion":"v1.0-β"}');
+    expect(canonicalJson({ minPipelineVersion: "v1.0-β/2" })).toBe(
+      '{"minPipelineVersion":"v1.0-β/2"}',
+    );
+    expect(canonicalJson({ "pipeline/id": "x" })).toBe('{"pipeline/id":"x"}');
+    expect(canonicalJson({ πipeline: 1 })).toBe('{"πipeline":1}');
+  });
+
+  it("policyFingerprint matches the PHP plugin digests for slash/unicode values", () => {
+    // These digests are pinned to the plugin WPCP_Autonomous::fingerprint()
+    // output for the same policies (cross-layer parity, AUTO-11 finding 2).
+    const base: AutonomousPolicy = {
+      schemaVersion: 1,
+      enabled: true,
+      allowedPipelines: [
+        {
+          pipelineId: "trt-news",
+          minPipelineVersion: "1.2.0",
+          limits: { maxRequestsPerHour: 20, maxRequestsPerDay: 100, maxScheduledPerDay: 20 },
+        },
+      ],
+    };
+    const slash: AutonomousPolicy = {
+      ...base,
+      allowedPipelines: [
+        {
+          pipelineId: "trt-news",
+          minPipelineVersion: "1.0/2",
+          limits: { maxRequestsPerHour: 20, maxRequestsPerDay: 100, maxScheduledPerDay: 20 },
+        },
+      ],
+    };
+    const unicode: AutonomousPolicy = {
+      ...base,
+      allowedPipelines: [
+        {
+          pipelineId: "trt-news",
+          minPipelineVersion: "v1.0-β",
+          limits: { maxRequestsPerHour: 20, maxRequestsPerDay: 100, maxScheduledPerDay: 20 },
+        },
+      ],
+    };
+    expect(policyFingerprint(base)).toBe(
+      "4367450c220b31b3e7e7d882750e28b6d0cd355b40df1016d7c9ddaf3bc7d1a4",
+    );
+    expect(policyFingerprint(slash)).toBe(
+      "d07d9c92bcce66871541af2cd26a4456e411e568ce20415cd67abe38f6a42a3b",
+    );
+    expect(policyFingerprint(unicode)).toBe(
+      "cef39159fd936832d594396b2873fbb97578f04f3257696f6b7bcbe605dd24fa",
+    );
+  });
 });
 
 describe("versionAtLeast", () => {

@@ -1593,7 +1593,16 @@ final class WPCP_REST_Controller extends WP_REST_Controller {
 				'object_id'   => $post_id,
 			)
 		);
-		$response    = array(
+		if ( null === $audit_id ) {
+			// Fail closed (ADR 0006 §6): an accepted execution must carry a
+			// durable success audit. The audit machinery is unavailable, so
+			// roll back the just-created mutation and refuse to report
+			// success; autonomous_execute() releases the reservation and
+			// records the failed attempt.
+			wp_delete_post( $post_id, true );
+			return new WP_Error( 'wpcp_audit_failed', __( 'The autonomous execution could not be durably audited; the content was not accepted.', 'editorial-publisher-for-chatgpt' ), array( 'status' => 500 ) );
+		}
+		$response = array(
 			'object'            => array(
 				'type' => $post->post_type,
 				'id'   => $post->ID,

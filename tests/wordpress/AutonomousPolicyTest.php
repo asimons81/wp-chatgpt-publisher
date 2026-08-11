@@ -11,9 +11,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 	define( 'ABSPATH', __DIR__ . '/' );
 }
 if ( ! function_exists( 'wp_json_encode' ) ) {
-	/** Minimal test double for WordPress's JSON encoder. */
-	function wp_json_encode( $value ): string|false {
-		return json_encode( $value, JSON_UNESCAPED_UNICODE );
+	/** Minimal test double for WordPress's JSON encoder (honors options like wp_json_encode). */
+	function wp_json_encode( $value, int $options = 0, int $depth = 512 ): string|false {
+		return json_encode( $value, $options, $depth );
 	}
 }
 if ( ! function_exists( '__' ) ) {
@@ -204,6 +204,68 @@ final class AutonomousPolicyTest extends TestCase {
 			'{"a":{"x":1,"y":2},"b":1,"c":[1,2]}',
 			WPCP_Autonomous::canonical_json( array( 'c' => array( 1, 2 ), 'a' => array( 'y' => 2, 'x' => 1 ), 'b' => 1 ) )
 		);
+	}
+
+	/** @return array<string,array{0:mixed,1:string}> */
+	public static function canonical_escaping_provider(): array {
+		return array(
+			'slash value'    => array( array( 'minPipelineVersion' => '1.0/2' ), '{"minPipelineVersion":"1.0/2"}' ),
+			'unicode value'  => array( array( 'minPipelineVersion' => 'v1.0-β' ), '{"minPipelineVersion":"v1.0-β"}' ),
+			'slash + unicode' => array( array( 'minPipelineVersion' => 'v1.0-β/2' ), '{"minPipelineVersion":"v1.0-β/2"}' ),
+			'slash key'      => array( array( 'pipeline/id' => 'x' ), '{"pipeline/id":"x"}' ),
+			'unicode key'    => array( array( 'πipeline' => 1 ), '{"πipeline":1}' ),
+			'nested'         => array( array( 'limits' => array( 'maxRequestsPerDay' => 100, 'label' => 'a/b-γ' ) ), '{"limits":{"label":"a/b-γ","maxRequestsPerDay":100}}' ),
+		);
+	}
+
+	/**
+	 * @dataProvider canonical_escaping_provider
+	 * Canonical JSON must never escape slashes or non-ASCII, exactly like the
+	 * server canonicalJson() (JSON.stringify): JSON_UNESCAPED_SLASHES and
+	 * JSON_UNESCAPED_UNICODE keep the byte-identical digest parity.
+	 */
+	public function test_canonical_json_matches_json_stringify_escaping( $value, string $expected ): void {
+		self::assertSame( $expected, WPCP_Autonomous::canonical_json( $value ) );
+	}
+
+	/** @return array<string,array{0:array<string,mixed>,1:string}> */
+	public static function fingerprint_parity_provider(): array {
+		$base = array(
+			'schemaVersion'    => 1,
+			'enabled'          => true,
+			'allowedPipelines' => array(
+				array(
+					'pipelineId'         => 'trt-news',
+					'minPipelineVersion' => '1.2.0',
+					'limits'             => array(
+						'maxRequestsPerHour' => 20,
+						'maxRequestsPerDay'  => 100,
+						'maxScheduledPerDay' => 20,
+					),
+				),
+			),
+		);
+		$slash   = $base;
+		$slash['allowedPipelines'][0]['minPipelineVersion'] = '1.0/2';
+		$unicode = $base;
+		$unicode['allowedPipelines'][0]['minPipelineVersion'] = 'v1.0-β';
+		// Digests below are pinned to the server canonicalJson() output; the
+		// vitest suite asserts the same constants (cross-layer parity).
+		return array(
+			'plain'   => array( $base, '4367450c220b31b3e7e7d882750e28b6d0cd355b40df1016d7c9ddaf3bc7d1a4' ),
+			'slash'   => array( $slash, 'd07d9c92bcce66871541af2cd26a4456e411e568ce20415cd67abe38f6a42a3b' ),
+			'unicode' => array( $unicode, 'cef39159fd936832d594396b2873fbb97578f04f3257696f6b7bcbe605dd24fa' ),
+		);
+	}
+
+	/**
+	 * @dataProvider fingerprint_parity_provider
+	 * The plugin fingerprint must equal the server policyFingerprint() digest
+	 * for the same policy, including values containing "/" and non-ASCII
+	 * characters (ADR 0006 §3, AUTO-11 review finding 2).
+	 */
+	public function test_fingerprint_matches_server_canonical_json( array $policy, string $expected ): void {
+		self::assertSame( $expected, WPCP_Autonomous::fingerprint( $policy ) );
 	}
 
 	/** @return array<string,array{0:string,1:string,2:bool}> */

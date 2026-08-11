@@ -262,12 +262,15 @@ final class WPCP_Autonomous {
 
 	/**
 	 * Stable JSON serialization: recursively sorted object keys, no
-	 * whitespace. Mirrors the server canonicalJson() so both layers produce
-	 * byte-identical digests for the same policy.
+	 * whitespace. Mirrors the server canonicalJson() (which uses
+	 * JSON.stringify) so both layers produce byte-identical digests for
+	 * the same policy: slashes and non-ASCII characters are never escaped
+	 * (JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE).
 	 *
 	 * @param mixed $value Value to serialize.
 	 */
 	public static function canonical_json( $value ): string {
+		$flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
 		if ( is_array( $value ) && array_is_list( $value ) ) {
 			$parts = array();
 			foreach ( $value as $item ) {
@@ -280,11 +283,11 @@ final class WPCP_Autonomous {
 			sort( $keys, SORT_STRING );
 			$parts = array();
 			foreach ( $keys as $key ) {
-				$parts[] = wp_json_encode( (string) $key ) . ':' . self::canonical_json( $value[ $key ] );
+				$parts[] = wp_json_encode( (string) $key, $flags ) . ':' . self::canonical_json( $value[ $key ] );
 			}
 			return '{' . implode( ',', $parts ) . '}';
 		}
-		$encoded = wp_json_encode( $value );
+		$encoded = wp_json_encode( $value, $flags );
 		return false === $encoded ? 'null' : $encoded;
 	}
 
