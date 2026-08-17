@@ -58,7 +58,7 @@
     "eslint-plugin-security": "latest",
     "globals": "latest",
     "prettier": "latest",
-    "tsx": "4.23.11",
+    "tsx": "4.23.12",
     "typescript": "latest",
     "typescript-eslint": "latest",
     "vitest": "latest"
