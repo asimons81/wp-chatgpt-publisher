@@ -21,7 +21,7 @@
     "helmet": "*",
     "ipaddr.js": "2.5.0",
     "jose": "6.2.8",
-    "pg": "*",
+    "pg": "8.23.0",
     "pino": "*",
     "pino-http": "*",
     "undici": "8.10.0",
