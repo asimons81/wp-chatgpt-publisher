@@ -50,7 +50,7 @@
     "@types/cors": "2.8.19",
     "@types/express": "5.0.6",
     "@types/node": "latest",
-    "@types/pg": "8.20.4",
+    "@types/pg": "8.21.0",
     "@vitest/coverage-v8": "latest",
     "archiver": "8.0.0",
     "concurrently": "latest",
