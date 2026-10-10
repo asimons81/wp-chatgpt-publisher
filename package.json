@@ -62,5 +62,10 @@
     "typescript": "latest",
     "typescript-eslint": "latest",
     "vitest": "latest"
+  },
+  "overrides": {
+    "fast-uri": "3.1.8",
+    "ip-address": "10.7.3",
+    "hono": "4.13.13"
   }
 }
